@@ -424,24 +424,12 @@ cmd_setup() {
   fi
 
   if [ ! -f "$CONFIG_FILE" ]; then
-    local projects
-    while :; do
-      read -r -p 'Only allow inmate inside this directory, e.g. ~/projects (blank: anywhere in your home): ' projects || projects=
-      trim projects
-      [ -z "$projects" ] && break
-      resolve_dir "$projects" > /dev/null && break
-      warn "'$projects' must be an existing directory, given as an absolute path or ~/..."
-    done
     {
       # Defaults stay commented out so later changes to them still apply.
       printf '# image=%s\n# memory=%s\n# cpus=%s\n' "$image" "$memory" "$cpus"
       printf '# inmate only runs inside your home directory. allow= lines narrow that\n'
       printf '# further: with any present, the project must be inside one of them.\n'
-      if [ -n "$projects" ]; then
-        printf 'allow=%s\n' "$projects"
-      else
-        printf '# allow=~/projects\n'
-      fi
+      printf '# allow=~/projects\n'
     } > "$CONFIG_FILE"
     printf 'Wrote %s\n' "$CONFIG_FILE"
   fi
