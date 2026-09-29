@@ -80,6 +80,8 @@ jobs:
       - name: Open or refresh an issue for the failed weekly build
         env:
           GH_TOKEN: ${{ github.token }}
+          # No checkout in this job, so gh can't infer the repo from a git remote.
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           title="Weekly image build failed"
