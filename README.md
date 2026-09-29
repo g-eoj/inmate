@@ -22,12 +22,27 @@ ran `inmate` from. Your home directory, keychain, SSH keys, and host Claude conf
 
 ```sh
 ./install.sh      # symlinks bin/inmate into ~/.local/bin
-inmate setup      # choose toolchains, build the image, store your token
+inmate setup      # choose toolchains, store your tokens, build the image
 ```
 
 `inmate setup` writes `~/.config/inmate/Dockerfile` from the toolchains you pick (Node,
-Python, Go, Rust). Edit it to customize the image, then run `inmate build`. The token is
-stored in the macOS Keychain under the service name `inmate`.
+Python, Go, Rust). Edit it to customize the image, then run `inmate build`.
+
+Before the build, setup asks for your tokens and stores them in the macOS Keychain under
+the service name `inmate`. You can skip either one and add it later with `inmate auth`.
+
+- **Claude**, from `claude setup-token`. Claude Code doesn't need to be installed on your
+  Mac: `inmate auth claude` runs `claude setup-token` in a throwaway VM that sees none of
+  your files, then asks you to paste the token it printed. On a first setup there's no
+  image to run it in yet, so setup offers this again after the build.
+- **GitHub** (optional). inmate only stores it for now; it isn't passed into the VM yet.
+  Every project's VM will share it, so create a
+  [fine-grained token](https://github.com/settings/personal-access-tokens/new) that covers
+  only the repos you use with inmate, without the Workflows permission. Don't reuse
+  `gh auth token` from your Mac: it covers all your repos and can change workflows.
+
+Don't log in inside the VM instead (Claude's `/login`, `gh auth login`). See Known
+limitations.
 
 ## Usage
 
@@ -37,7 +52,9 @@ stored in the macOS Keychain under the service name `inmate`.
 | `inmate <cmd> [args]` | Any other command, e.g. `inmate bash` or `inmate npm test` |
 | `inmate build` | Rebuild the image after editing the Dockerfile |
 | `inmate update` | Update Claude Code in the image |
-| `inmate token` | Replace the stored token |
+| `inmate auth` | List which tokens are stored (names only, never values) |
+| `inmate auth claude` | Get a new Claude token and store it. `inmate token` does the same |
+| `inmate auth github` | Store a GitHub token |
 
 Claude keeps its normal permission prompts. If you pass `--dangerously-skip-permissions`,
 it can run any command without asking, but only inside the VM.
@@ -90,9 +107,17 @@ link you ran), so the VM can't change them.
 
 ## Known limitations
 
-- **The token is readable inside the VM.** Anything running in the VM can read it from the
+- **The Claude token is readable inside the VM.** Anything running in the VM can read it from the
   environment. It only permits model requests, and you can revoke it in your Claude
   account settings.
+- **Logging in inside the VM stores a plaintext credential in the project.** The VM has
+  no keychain, so Claude's `/login` writes `.inmate/home/.claude/.credentials.json`, and
+  `gh auth login` writes `.inmate/home/.config/gh/hosts.yml`. That's a full login, and
+  anything in the VM or with access to the project can read it. inmate warns about these
+  files every time it starts, but doesn't delete them. Delete them yourself, then run
+  `inmate auth claude` or `inmate auth github`.
+- **The GitHub token isn't used yet.** The image has no `gh`, and inmate doesn't pass the
+  token into the VM.
 - **Claude can still damage the project**, including `.git`. Commit or push before long
   unattended sessions.
 - **No Xcode.** The VM is Linux.
