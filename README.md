@@ -54,6 +54,19 @@ it can run any command without asking, but only inside the VM.
   root-owned inside the VM. Files Claude creates are owned by you on the Mac.
 - **Symlinks can't escape.** A symlink in the project that points at `~/.ssh` resolves
   inside the VM, where that path doesn't exist.
+- **Privacy settings are locked.** The image carries a Claude Code managed settings file,
+  `image/managed-settings.d/10-inmate-privacy.json`, that turns off telemetry, error
+  reporting, feedback surveys, the `/feedback` command, and auto-updates. Managed settings
+  outrank every project and user setting, and each run starts from the image, so nothing
+  in the project can turn them back on. Run `/status` in Claude to see
+  `Enterprise managed settings (drop-ins)`.
+
+Two things no local setting controls:
+
+- **Model training** on your conversations is an account setting: claude.ai → Settings →
+  Data privacy controls.
+- **Transcripts** are stored in the project, under `.inmate/home/.claude/projects/`. Git
+  ignores them, but anything that can read the project can read them.
 
 ## Configuration
 
@@ -69,7 +82,8 @@ allow=~/projects
 inmate only runs in directories below your home directory. Optional `allow=` lines narrow
 this: if any are present, the project must be one of them or inside one. Give each as an
 absolute path or `~/...`. inmate also refuses any project that contains its own files
-(`~/.config/inmate`, the inmate checkout, `~/.local/bin`), so the VM can't change them.
+(`~/.config/inmate`, the inmate checkout, `~/.local/bin`, and the directory of the `inmate`
+link you ran), so the VM can't change them.
 
 `INMATE_IMAGE`, `INMATE_MEMORY`, `INMATE_CPUS`, and `INMATE_ALLOW` (entries separated by
 `:`) override the file.
