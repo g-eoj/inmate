@@ -316,7 +316,8 @@ store_secret() {
   # `security -i` reads the command from stdin, so the token never shows up in argv.
   printf 'add-generic-password -U -s %s -a %s -w %s\n' \
     "$KEYCHAIN_SERVICE" "$(secret_account "$1")" "$token" | security -i
-  has_secret "$1" || die "couldn't store the token in the Keychain"
+  # Compare values: when replacing a token, a failed update leaves the old item.
+  [ "$(keychain_secret "$1")" = "$token" ] || die "couldn't store the token in the Keychain"
   printf 'Stored "%s" in the Keychain (service "%s").\n' "$1" "$KEYCHAIN_SERVICE"
 }
 
