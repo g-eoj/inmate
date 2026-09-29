@@ -1,0 +1,30 @@
+name: image
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same fragment order `inmate setup` writes: 00 base, 1x-8x toolchains
+      # (all of them here), 9x claude. Catches broken fragments before a user
+      # hits them.
+      - name: Assemble Dockerfile
+        run: cat image/fragments/*.Dockerfile > image/Dockerfile
+
+      - name: Build image
+        run: docker build -f image/Dockerfile -t inmate:ci image
+
+      - name: Validate managed privacy settings
+        run: |
+          jq -e '.env.DISABLE_TELEMETRY == "1" and .feedbackSurveyRate == 0' \
+            image/managed-settings.d/10-inmate-privacy.json

@@ -108,4 +108,5 @@ link you ran), so the VM can't change them.
 
 ```sh
 test/isolation.sh     # checks the VM sees the project and nothing else
+test/host.sh          # the isolation.sh checks that need no VM, for CI
 ```
