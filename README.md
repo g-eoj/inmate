@@ -1,5 +1,7 @@
 # inmate
 
+[![CI](https://github.com/g-eoj/inmate/actions/workflows/lint.yml/badge.svg)](https://github.com/g-eoj/inmate/actions/workflows/lint.yml)
+
 Run Claude Code in an Apple container VM that sees only your project directory.
 
 ```sh
@@ -44,6 +46,9 @@ the service name `inmate`. You can skip either one and add it later with `inmate
 Don't log in inside the VM instead (Claude's `/login`, `gh auth login`). See Known
 limitations.
 
+Set `INMATE_TOOLCHAINS` (`all`, or a comma list of fragment labels like `node,python`) to
+skip the toolchain prompts, e.g. for a scripted install or CI.
+
 ## Usage
 
 | Command | What it does |
@@ -52,6 +57,7 @@ limitations.
 | `inmate <cmd> [args]` | Any other command, e.g. `inmate bash` or `inmate npm test` |
 | `inmate build` | Rebuild the image after editing the Dockerfile |
 | `inmate update` | Update Claude Code in the image |
+| `inmate dockerfile <path>` | Write the assembled Dockerfile to `<path>` without building |
 | `inmate auth` | List which tokens are stored (names only, never values) |
 | `inmate auth claude` | Get a new Claude token and store it. `inmate token` does the same |
 | `inmate auth github` | Store a GitHub token |
@@ -133,4 +139,5 @@ link you ran), so the VM can't change them.
 
 ```sh
 test/isolation.sh     # checks the VM sees the project and nothing else
+test/host.sh          # checks inmate refuses directories it shouldn't, no VM needed
 ```

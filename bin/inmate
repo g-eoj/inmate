@@ -2,15 +2,16 @@
 # inmate: run a command (usually Claude Code) in an Apple `container` VM that
 # can see only the current directory.
 #
-#   inmate setup          choose toolchains, store your tokens, build the image
-#   inmate build          rebuild the image from ~/.config/inmate/Dockerfile
-#   inmate update         rebuild only the Claude Code layer
-#   inmate auth           list which tokens are stored in the Keychain
-#   inmate auth claude    get a token with `claude setup-token` and store it
-#   inmate auth github    store a GitHub token (not passed into the VM yet)
-#   inmate token          same as `inmate auth claude`
-#   inmate <cmd> [args]   run <cmd> in the VM, e.g. `inmate claude`, `inmate bash`
-#   inmate -- <cmd>       same, for commands named like the subcommands above
+#   inmate setup              choose toolchains, store your tokens, build the image
+#   inmate build              rebuild the image from ~/.config/inmate/Dockerfile
+#   inmate update             rebuild only the Claude Code layer
+#   inmate dockerfile <path>  write the assembled Dockerfile, without building
+#   inmate auth               list which tokens are stored in the Keychain
+#   inmate auth claude        get a token with `claude setup-token` and store it
+#   inmate auth github        store a GitHub token (not passed into the VM yet)
+#   inmate token              same as `inmate auth claude`
+#   inmate <cmd> [args]       run <cmd> in the VM, e.g. `inmate claude`, `inmate bash`
+#   inmate -- <cmd>           same, for commands named like the subcommands above
 
 set -euo pipefail
 
@@ -372,17 +373,27 @@ cmd_auth() {
 
 cmd_token() { cmd_auth claude; }
 
-# Assemble ~/.config/inmate/Dockerfile from the base fragment, the toolchains
-# you pick, and the Claude Code fragment. Fragment numbers fix the order:
-# 00 is the base, 1x-8x are optional toolchains, 9x always come last.
+# Assemble a Dockerfile from the base fragment, the toolchains you pick, and
+# the Claude Code fragment, and write it to $1 (default $DOCKERFILE). Fragment
+# numbers fix the order: 00 is the base, 1x-8x are optional toolchains, 9x
+# always come last. With INMATE_TOOLCHAINS set ("all", or a comma-separated
+# list of fragment labels like "node,python"), toolchains are picked from it
+# instead of prompting, for non-interactive builds.
 write_dockerfile() {
+  local out=${1:-$DOCKERFILE}
   local fragments="$IMAGE_DIR/fragments"
   local picked=("$fragments"/0*.Dockerfile)
   local f label
   for f in "$fragments"/[1-8]*.Dockerfile; do
     label=$(basename "$f" .Dockerfile)
     label=${label#*-}
-    if confirm "Include $label?" y; then picked+=("$f"); fi
+    if [ -n "${INMATE_TOOLCHAINS-}" ]; then
+      case ",$INMATE_TOOLCHAINS," in
+        ,all, | *",$label,"*) picked+=("$f") ;;
+      esac
+    elif confirm "Include $label?" y; then
+      picked+=("$f")
+    fi
   done
   picked+=("$fragments"/9*.Dockerfile)
 
@@ -394,8 +405,13 @@ write_dockerfile() {
       printf '\n'
       cat "$f"
     done
-  } > "$DOCKERFILE"
-  printf 'Wrote %s\n' "$DOCKERFILE"
+  } > "$out"
+  printf 'Wrote %s\n' "$out"
+}
+
+cmd_dockerfile() {
+  [ $# -gt 0 ] || die "usage: inmate dockerfile <path>"
+  write_dockerfile "$1"
 }
 
 cmd_setup() {
@@ -457,7 +473,7 @@ main() {
   load_config
   case "${1-}" in
     '' | -h | --help | help) usage ;;
-    setup | build | update | auth | token) "cmd_$1" "${@:2}" ;;
+    setup | build | update | dockerfile | auth | token) "cmd_$1" "${@:2}" ;;
     --)
       shift
       cmd_run "$@"
