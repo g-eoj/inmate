@@ -1,5 +1,7 @@
 # inmate
 
+[![CI](https://github.com/g-eoj/inmate/actions/workflows/lint.yml/badge.svg)](https://github.com/g-eoj/inmate/actions/workflows/lint.yml)
+
 Run Claude Code in an Apple container VM that sees only your project directory.
 
 ```sh
@@ -29,6 +31,9 @@ inmate setup      # choose toolchains, build the image, store your token
 Python, Go, Rust). Edit it to customize the image, then run `inmate build`. The token is
 stored in the macOS Keychain under the service name `inmate`.
 
+Set `INMATE_TOOLCHAINS` (`all`, or a comma list of fragment labels like `node,python`) to
+skip the toolchain prompts, e.g. for a scripted install or CI.
+
 ## Usage
 
 | Command | What it does |
@@ -37,6 +42,7 @@ stored in the macOS Keychain under the service name `inmate`.
 | `inmate <cmd> [args]` | Any other command, e.g. `inmate bash` or `inmate npm test` |
 | `inmate build` | Rebuild the image after editing the Dockerfile |
 | `inmate update` | Update Claude Code in the image |
+| `inmate dockerfile <path>` | Write the assembled Dockerfile to `<path>` without building |
 | `inmate token` | Replace the stored token |
 
 Claude keeps its normal permission prompts. If you pass `--dangerously-skip-permissions`,
@@ -108,5 +114,5 @@ link you ran), so the VM can't change them.
 
 ```sh
 test/isolation.sh     # checks the VM sees the project and nothing else
-test/host.sh          # the isolation.sh checks that need no VM, for CI
+test/host.sh          # checks inmate refuses directories it shouldn't, no VM needed
 ```
