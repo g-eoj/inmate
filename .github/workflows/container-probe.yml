@@ -1,0 +1,21 @@
+name: container-probe
+
+# One-off: does a hosted macOS runner allow the nested virtualization Apple
+# `container` needs? Manual dispatch only, not on every push/PR. Until this
+# passes (or a self-hosted runner exists), test/isolation.sh stays a manual
+# pre-release step.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    steps:
+      - name: Install container and start its system service
+        run: |
+          brew install container
+          container system start
