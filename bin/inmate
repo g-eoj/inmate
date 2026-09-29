@@ -2,13 +2,16 @@
 # inmate: run a command (usually Claude Code) in an Apple `container` VM that
 # can see only the current directory.
 #
-#   inmate setup            choose toolchains, build the image, store the token
-#   inmate build            rebuild the image from ~/.config/inmate/Dockerfile
-#   inmate update           rebuild only the Claude Code layer
+#   inmate setup              choose toolchains, store your tokens, build the image
+#   inmate build              rebuild the image from ~/.config/inmate/Dockerfile
+#   inmate update             rebuild only the Claude Code layer
 #   inmate dockerfile <path>  write the assembled Dockerfile, without building
-#   inmate token            store a `claude setup-token` token in the Keychain
-#   inmate <cmd> [args]     run <cmd> in the VM, e.g. `inmate claude`, `inmate bash`
-#   inmate -- <cmd>         same, for commands named like the subcommands above
+#   inmate auth               list which tokens are stored in the Keychain
+#   inmate auth claude        get a token with `claude setup-token` and store it
+#   inmate auth github        store a GitHub token (not passed into the VM yet)
+#   inmate token              same as `inmate auth claude`
+#   inmate <cmd> [args]       run <cmd> in the VM, e.g. `inmate claude`, `inmate bash`
+#   inmate -- <cmd>           same, for commands named like the subcommands above
 
 set -euo pipefail
 
@@ -21,8 +24,10 @@ IMAGE_DIR="$INMATE_ROOT/image"  # build context: Dockerfile fragments + entrypoi
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/inmate"
 CONFIG_FILE="$CONFIG_DIR/config"
 DOCKERFILE="$CONFIG_DIR/Dockerfile"
-KEYCHAIN_SERVICE=inmate
-KEYCHAIN_ACCOUNT=claude-code-oauth-token
+# Tokens live in the Keychain under this service, one account per name that
+# `inmate auth` knows. INMATE_KEYCHAIN_SERVICE is for tests.
+KEYCHAIN_SERVICE=${INMATE_KEYCHAIN_SERVICE:-inmate}
+SECRET_NAMES='claude github'
 
 # Defaults, overridden by the config file and then by INMATE_* env vars.
 image=inmate:latest
@@ -182,14 +187,29 @@ container_name() {
   printf 'inmate-%s-%04x%04x' "${slug:-project}" "$RANDOM" "$RANDOM"
 }
 
-keychain_token() {
-  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w 2> /dev/null
+# Print the Keychain account for a secret name. claude keeps the account name
+# from before `inmate auth` existed, so tokens stored back then still work.
+secret_account() {
+  case "$1" in
+    claude) printf 'claude-code-oauth-token' ;;
+    github) printf 'github' ;;
+    *) die "unknown name '$1' (known: $SECRET_NAMES)" ;;
+  esac
+}
+
+# Without -w, `security` looks up only the item's attributes, not its value.
+has_secret() {
+  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$(secret_account "$1")" > /dev/null 2>&1
+}
+
+keychain_secret() {
+  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$(secret_account "$1")" -w 2> /dev/null
 }
 
 load_token() {
   if [ -z "${CLAUDE_CODE_OAUTH_TOKEN-}" ]; then
-    CLAUDE_CODE_OAUTH_TOKEN=$(keychain_token) ||
-      warn "no Claude token in the Keychain (run: inmate token); Claude will ask you to log in"
+    CLAUDE_CODE_OAUTH_TOKEN=$(keychain_secret claude) ||
+      warn "no Claude token in the Keychain (run: inmate auth claude); logging in inside the VM instead leaves a plaintext credential in the project"
   fi
 }
 
@@ -224,9 +244,7 @@ cmd_run() {
     GIT_AUTHOR_EMAIL=$email GIT_COMMITTER_EMAIL=$email
   fi
 
-  local args=(run --rm --progress none
-    --name "$(container_name "$project")"
-    --memory "$memory" --cpus "$cpus"
+  local args=(--name "$(container_name "$project")"
     -v "$project:$project" -w "$project")
   # Pass these through by name (`-e VAR`, no value) so the token and the rest
   # never appear in argv, where `ps` would show them. This list is the only
@@ -240,18 +258,31 @@ cmd_run() {
     fi
   done
 
+  # set -e propagates a nonzero status as our exit status.
+  run_vm "${args[@]}" "$image" "$@"
+}
+
+# Start a VM that's removed when it exits: `container run` with the configured
+# resources, plus $@. On a terminal, it runs interactively.
+run_vm() {
+  local status=0 args=(run --rm --progress none --memory "$memory" --cpus "$cpus")
   if [ -t 0 ] && [ -t 1 ]; then
-    args+=(-it)
     # apple/container#2299 leaves ONLCR on in raw mode, which garbles
-    # full-screen TUIs like Claude Code. Turn it off, then restore on exit.
+    # full-screen TUIs like Claude Code. Turn it off while the VM runs.
     # (Global, not local: the EXIT trap must still see it.)
     saved_tty=$(stty -g)
     trap 'stty "$saved_tty"' EXIT
     stty -onlcr
+    container "${args[@]}" -it "$@" || status=$?
+    stty "$saved_tty"
+    trap - EXIT
+    # `container run -it` also leaves the terminal non-blocking, so the next
+    # `read` (the token prompt after `claude setup-token`) fails with EAGAIN.
+    perl -MFcntl -e 'fcntl(STDIN, F_SETFL, fcntl(STDIN, F_GETFL, 0) & ~O_NONBLOCK)'
+  else
+    container "${args[@]}" "$@" || status=$?
   fi
-
-  # set -e propagates a nonzero status as our exit status, after the EXIT trap.
-  container "${args[@]}" "$image" "$@"
+  return "$status"
 }
 
 cmd_build() {
@@ -264,22 +295,84 @@ cmd_update() {
   cmd_build --build-arg "CLAUDE_CACHE_BUST=$(date +%s)" "$@"
 }
 
-cmd_token() {
+# Read a pasted token and store it in the Keychain under name $1. A blank
+# answer skips it.
+store_secret() {
   local token
-  # shellcheck disable=SC2016 # literal backticks
-  printf 'Run `claude setup-token` on this Mac (in another terminal), then paste the token here.\n'
-  IFS= read -r -s -p 'Token: ' token || token=
-  printf '\n'
-  # Tokens contain only these characters. Checking also makes it safe to
-  # splice the token into the `security -i` command below.
-  case "$token" in
-    '' | *[!A-Za-z0-9_-]*) die "that doesn't look like a token" ;;
-  esac
+  while :; do
+    IFS= read -r -s -p 'Token (blank to skip): ' token || token=
+    printf '\n'
+    if [ -z "$token" ]; then
+      printf 'Skipped; nothing stored.\n'
+      return 0
+    fi
+    # Tokens contain only these characters. Checking also makes it safe to
+    # splice the token into the `security -i` command below.
+    case "$token" in
+      *[!A-Za-z0-9_-]*) warn "that doesn't look like a token; try again" ;;
+      *) break ;;
+    esac
+  done
   # `security -i` reads the command from stdin, so the token never shows up in argv.
   printf 'add-generic-password -U -s %s -a %s -w %s\n' \
-    "$KEYCHAIN_SERVICE" "$KEYCHAIN_ACCOUNT" "$token" | security -i
-  printf 'Stored in the Keychain (service "%s").\n' "$KEYCHAIN_SERVICE"
+    "$KEYCHAIN_SERVICE" "$(secret_account "$1")" "$token" | security -i
+  # Compare values: when replacing a token, a failed update leaves the old item.
+  [ "$(keychain_secret "$1")" = "$token" ] || die "couldn't store the token in the Keychain"
+  printf 'Stored "%s" in the Keychain (service "%s").\n' "$1" "$KEYCHAIN_SERVICE"
 }
+
+# `claude setup-token` only prints a token, so run it in a throwaway VM and
+# Claude Code needn't be installed on the Mac. The VM has no host mount: the
+# working directory, and with it the entrypoint's .inmate/home, is a tmpfs.
+# setup-token needs a terminal; without one, just read the token from stdin.
+auth_claude() {
+  ensure_container_running
+  if ! image_exists; then
+    cat << 'EOF'
+The image isn't built yet, so `claude setup-token` can't run in a VM.
+If Claude Code is on this Mac, run `claude setup-token` in another terminal.
+Otherwise skip this and get a token after the build with: inmate auth claude
+EOF
+  elif [ -t 0 ] && [ -t 1 ]; then
+    # shellcheck disable=SC2016 # literal backticks
+    printf 'Running `claude setup-token` in a throwaway VM. Log in, then copy the token it prints.\n'
+    run_vm --name "$(container_name auth)" --tmpfs /auth -w /auth -e TERM \
+      "$image" claude setup-token || warn "claude setup-token failed"
+  fi
+  printf 'Paste the Claude token here.\n'
+  store_secret claude
+}
+
+auth_github() {
+  cat << 'EOF'
+inmate stores this token but doesn't pass it into the VM yet.
+Create a fine-grained token at https://github.com/settings/personal-access-tokens/new
+that covers only the repos you use with inmate, without the Workflows permission.
+Don't reuse `gh auth token` from this Mac: it covers all your repos and workflows.
+Paste the GitHub token here.
+EOF
+  store_secret github
+}
+
+# `inmate auth` stores a token; with no name, it lists which ones are stored.
+cmd_auth() {
+  local name
+  case "${1-}" in
+    '')
+      for name in $SECRET_NAMES; do
+        if has_secret "$name"; then
+          printf '%-8s stored\n' "$name"
+        else
+          printf '%-8s not stored\n' "$name"
+        fi
+      done
+      ;;
+    claude | github) "auth_$1" ;;
+    *) die "usage: inmate auth [claude|github]" ;;
+  esac
+}
+
+cmd_token() { cmd_auth claude; }
 
 # Assemble a Dockerfile from the base fragment, the toolchains you pick, and
 # the Claude Code fragment, and write it to $1 (default $DOCKERFILE). Fragment
@@ -353,9 +446,27 @@ cmd_setup() {
     printf 'Wrote %s\n' "$CONFIG_FILE"
   fi
 
+  # Ask for tokens before the build, so it doesn't separate you from the prompt.
+  # Without an image, `claude setup-token` can't run in a VM yet; if you skip
+  # the Claude token then, it's offered again after the build.
+  local claude_after_build=
+  if ! has_secret claude; then
+    printf '\nClaude token\n'
+    image_exists || claude_after_build=1
+    auth_claude
+  fi
+  if ! has_secret github; then
+    printf '\nGitHub token (optional)\n'
+    auth_github
+  fi
+  printf '\n'
+
   cmd_build
 
-  keychain_token > /dev/null || cmd_token
+  if [ -n "$claude_after_build" ] && ! has_secret claude &&
+    confirm $'\nNo Claude token yet. Run `claude setup-token` in a throwaway VM now?' y; then
+    auth_claude
+  fi
   printf '\nDone. cd into a project and run: inmate claude\n'
 }
 
@@ -363,7 +474,7 @@ main() {
   load_config
   case "${1-}" in
     '' | -h | --help | help) usage ;;
-    setup | build | update | token | dockerfile) "cmd_$1" "${@:2}" ;;
+    setup | build | update | dockerfile | auth | token) "cmd_$1" "${@:2}" ;;
     --)
       shift
       cmd_run "$@"
