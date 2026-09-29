@@ -47,9 +47,6 @@ refuses() {
   grep -q 'refusing to expose' <<< "$out"
 }
 
-# Run a command with INMATE_ALLOW set to $1.
-with_allow() { local a=$1; shift; INMATE_ALLOW=$a "$@"; }
-
 ignored_by_git() {
   [ -d "$project/.inmate" ] && [ -z "$(git -C "$project" status --porcelain -- .inmate)" ]
 }
@@ -67,10 +64,9 @@ check "refuses to run in \$HOME" refuses "$HOME"
 check "refuses a directory outside \$HOME" refuses "$outside_home"
 check "refuses a directory outside allow=" refuses "$outside"
 check "refuses a look-alike of an allowed directory" refuses "$lookalike"
-check "an empty allow= entry doesn't allow everything" with_allow ":$base/allowed" refuses "$outside"
-check "a relative allow= entry doesn't allow everything" with_allow "." refuses "$outside"
-check "refuses the directory holding inmate itself" \
-  with_allow "$root" refuses "$root/bin"
+INMATE_ALLOW=":$base/allowed" check "an empty allow= entry doesn't allow everything" refuses "$outside"
+INMATE_ALLOW=. check "a relative allow= entry doesn't allow everything" refuses "$outside"
+INMATE_ALLOW=$root check "refuses the directory holding inmate itself" refuses "$root/bin"
 
 if [ "$failures" -gt 0 ]; then
   printf '\n%d check(s) failed\n' "$failures"

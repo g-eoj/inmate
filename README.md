@@ -69,7 +69,8 @@ allow=~/projects
 inmate only runs in directories below your home directory. Optional `allow=` lines narrow
 this: if any are present, the project must be one of them or inside one. Give each as an
 absolute path or `~/...`. inmate also refuses any project that contains its own files
-(`~/.config/inmate`, the inmate checkout, `~/.local/bin`), so the VM can't change them.
+(`~/.config/inmate`, the inmate checkout, `~/.local/bin`, and the directory of the `inmate`
+link you ran), so the VM can't change them.
 
 `INMATE_IMAGE`, `INMATE_MEMORY`, `INMATE_CPUS`, and `INMATE_ALLOW` (entries separated by
 `:`) override the file.
