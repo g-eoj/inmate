@@ -1,0 +1,94 @@
+name: image
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - image/**
+      - bin/inmate
+      - .github/workflows/image.yml
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - image/**
+      - bin/inmate
+      - .github/workflows/image.yml
+  schedule:
+    # Catches upstream breakage (nodejs.org, go.dev, sh.rustup.rs,
+    # claude.ai/install.sh, GitHub's apt repo) with no commit here.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm # arm64, matching Apple silicon
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Same assembly `inmate setup` does, with every toolchain and no prompts.
+      - name: Assemble the Dockerfile
+        run: INMATE_TOOLCHAINS=all bin/inmate dockerfile image/Dockerfile
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: image/Dockerfile
+
+      - name: Build the image
+        run: docker buildx build --load -f image/Dockerfile -t inmate:ci image
+
+      - name: Validate managed privacy settings
+        run: |
+          jq -e '.env.DISABLE_TELEMETRY == "1" and .feedbackSurveyRate == 0' \
+            image/managed-settings.d/10-inmate-privacy.json
+
+      # Runs the built image under Docker, not Apple `container`, but the
+      # image and entrypoint.sh are the same either way.
+      - name: Smoke-test the image and entrypoint
+        run: |
+          workdir=$(mktemp -d)
+          docker run --rm -v "$workdir:$workdir" -w "$workdir" inmate:ci sh -c '
+            set -eux
+            [ -d .inmate/home ]
+            [ -f .inmate/.gitignore ]
+            [ -f .inmate/.ignore ]
+            claude --version
+            node --version; npm --version
+            python3 --version; uv --version
+            go version
+            rustc --version
+            jq -e ".env.DISABLE_TELEMETRY == \"1\" and .feedbackSurveyRate == 0" \
+              /etc/claude-code/managed-settings.d/10-inmate-privacy.json
+            # TODO(#1): plant a .credentials.json or gh/hosts.yml and assert
+            # inmate warns about it.
+            # TODO(#2): assert gh --version once a GitHub CLI fragment exists.
+            # TODO(#6): assert no real credential appears in the VM environment,
+            # once the credential broker exists.
+          '
+
+  notify-on-failure:
+    needs: build
+    if: always() && needs.build.result == 'failure' && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or refresh an issue for the failed weekly build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # No checkout in this job, so gh can't infer the repo from a git remote.
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly image build failed"
+          body="The scheduled image build failed: $RUN_URL"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

@@ -2,12 +2,13 @@
 # inmate: run a command (usually Claude Code) in an Apple `container` VM that
 # can see only the current directory.
 #
-#   inmate setup          choose toolchains, build the image, store the token
-#   inmate build          rebuild the image from ~/.config/inmate/Dockerfile
-#   inmate update         rebuild only the Claude Code layer
-#   inmate token          store a `claude setup-token` token in the Keychain
-#   inmate <cmd> [args]   run <cmd> in the VM, e.g. `inmate claude`, `inmate bash`
-#   inmate -- <cmd>       same, for commands named like the subcommands above
+#   inmate setup            choose toolchains, build the image, store the token
+#   inmate build            rebuild the image from ~/.config/inmate/Dockerfile
+#   inmate update           rebuild only the Claude Code layer
+#   inmate dockerfile <path>  write the assembled Dockerfile, without building
+#   inmate token            store a `claude setup-token` token in the Keychain
+#   inmate <cmd> [args]     run <cmd> in the VM, e.g. `inmate claude`, `inmate bash`
+#   inmate -- <cmd>         same, for commands named like the subcommands above
 
 set -euo pipefail
 
@@ -280,17 +281,27 @@ cmd_token() {
   printf 'Stored in the Keychain (service "%s").\n' "$KEYCHAIN_SERVICE"
 }
 
-# Assemble ~/.config/inmate/Dockerfile from the base fragment, the toolchains
-# you pick, and the Claude Code fragment. Fragment numbers fix the order:
-# 00 is the base, 1x-8x are optional toolchains, 9x always come last.
+# Assemble a Dockerfile from the base fragment, the toolchains you pick, and
+# the Claude Code fragment, and write it to $1 (default $DOCKERFILE). Fragment
+# numbers fix the order: 00 is the base, 1x-8x are optional toolchains, 9x
+# always come last. With INMATE_TOOLCHAINS set ("all", or a comma-separated
+# list of fragment labels like "node,python"), toolchains are picked from it
+# instead of prompting, for non-interactive builds.
 write_dockerfile() {
+  local out=${1:-$DOCKERFILE}
   local fragments="$IMAGE_DIR/fragments"
   local picked=("$fragments"/0*.Dockerfile)
   local f label
   for f in "$fragments"/[1-8]*.Dockerfile; do
     label=$(basename "$f" .Dockerfile)
     label=${label#*-}
-    if confirm "Include $label?" y; then picked+=("$f"); fi
+    if [ -n "${INMATE_TOOLCHAINS-}" ]; then
+      case ",$INMATE_TOOLCHAINS," in
+        ,all, | *",$label,"*) picked+=("$f") ;;
+      esac
+    elif confirm "Include $label?" y; then
+      picked+=("$f")
+    fi
   done
   picked+=("$fragments"/9*.Dockerfile)
 
@@ -302,8 +313,13 @@ write_dockerfile() {
       printf '\n'
       cat "$f"
     done
-  } > "$DOCKERFILE"
-  printf 'Wrote %s\n' "$DOCKERFILE"
+  } > "$out"
+  printf 'Wrote %s\n' "$out"
+}
+
+cmd_dockerfile() {
+  [ $# -gt 0 ] || die "usage: inmate dockerfile <path>"
+  write_dockerfile "$1"
 }
 
 cmd_setup() {
@@ -347,7 +363,7 @@ main() {
   load_config
   case "${1-}" in
     '' | -h | --help | help) usage ;;
-    setup | build | update | token) "cmd_$1" "${@:2}" ;;
+    setup | build | update | token | dockerfile) "cmd_$1" "${@:2}" ;;
     --)
       shift
       cmd_run "$@"

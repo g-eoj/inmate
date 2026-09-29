@@ -1,8 +1,8 @@
 #!/bin/bash
 # Checks that a VM started by inmate can see the project directory and nothing
-# else, that inmate refuses directories it shouldn't expose, and that the image
-# carries its managed privacy settings. Uses the configured image; override it
-# with INMATE_IMAGE.
+# else, and that the image carries its managed privacy settings. Uses the
+# configured image; override it with INMATE_IMAGE. See test/host.sh for the
+# directory-refusal checks, which need no VM.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -11,16 +11,12 @@ inmate="$root/bin/inmate"
 # inmate only runs inside your home directory, so the test tree lives there.
 base=$(mktemp -d "$HOME/.inmate-test.XXXXXX")
 base=$(cd "$base" && pwd -P)
-outside_home=$(mktemp -d "${TMPDIR:-/tmp}/inmate-test.XXXXXX")
-trap 'rm -rf "$base" "$outside_home"' EXIT
+trap 'rm -rf "$base"' EXIT
 
-# Only $base/allowed is on the allowlist. The other dirs must be refused,
-# including allowed-old, whose path starts with the same characters.
 export INMATE_ALLOW="$base/allowed"
 project="$base/allowed/project"
 outside="$base/outside"
-lookalike="$base/allowed-old/project"
-mkdir -p "$project" "$outside" "$lookalike"
+mkdir -p "$project" "$outside"
 echo secret > "$outside/secret.txt"
 ln -s "$outside/secret.txt" "$project/link-to-secret"
 git -C "$project" init -q
@@ -40,14 +36,6 @@ check() {
 # Run a shell snippet in a VM whose project is $project.
 in_vm() { (cd "$project" && "$inmate" sh -c "$1") > /dev/null 2>&1; }
 
-# Pass only if inmate refuses the directory. The bogus image means that if
-# inmate fails to refuse, it stops at the image check without mounting anything.
-refuses() {
-  local out
-  out=$(cd "$1" && INMATE_IMAGE=inmate-test/no-such-image "$inmate" true 2>&1) || true
-  grep -q 'refusing to expose' <<< "$out"
-}
-
 ignored_by_git() {
   [ -d "$project/.inmate" ] && [ -z "$(git -C "$project" status --porcelain -- .inmate)" ]
 }
@@ -63,14 +51,6 @@ check ".inmate/ exists and is ignored by git" ignored_by_git
 check "managed privacy settings are in the image and parse" \
   in_vm "jq -e '.env.DISABLE_TELEMETRY == \"1\" and .feedbackSurveyRate == 0' \
     /etc/claude-code/managed-settings.d/10-inmate-privacy.json"
-check "refuses to run in /" refuses /
-check "refuses to run in \$HOME" refuses "$HOME"
-check "refuses a directory outside \$HOME" refuses "$outside_home"
-check "refuses a directory outside allow=" refuses "$outside"
-check "refuses a look-alike of an allowed directory" refuses "$lookalike"
-INMATE_ALLOW=":$base/allowed" check "an empty allow= entry doesn't allow everything" refuses "$outside"
-INMATE_ALLOW=. check "a relative allow= entry doesn't allow everything" refuses "$outside"
-INMATE_ALLOW=$root check "refuses the directory holding inmate itself" refuses "$root/bin"
 
 if [ "$failures" -gt 0 ]; then
   printf '\n%d check(s) failed\n' "$failures"
