@@ -1,7 +1,8 @@
 #!/bin/bash
 # Checks that a VM started by inmate can see the project directory and nothing
-# else, and that inmate refuses directories it shouldn't expose. Uses the
-# configured image; override it with INMATE_IMAGE.
+# else, that inmate refuses directories it shouldn't expose, and that the image
+# carries its managed privacy settings. Uses the configured image; override it
+# with INMATE_IMAGE.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -47,9 +48,6 @@ refuses() {
   grep -q 'refusing to expose' <<< "$out"
 }
 
-# Run a command with INMATE_ALLOW set to $1.
-with_allow() { local a=$1; shift; INMATE_ALLOW=$a "$@"; }
-
 ignored_by_git() {
   [ -d "$project/.inmate" ] && [ -z "$(git -C "$project" status --porcelain -- .inmate)" ]
 }
@@ -62,15 +60,17 @@ check "a symlink to a file outside the project dangles" in_vm "[ ! -e link-to-se
 check "the VM can write to the project" in_vm "echo hi > from-vm.txt"
 check "files written in the VM are owned by you" test -O "$project/from-vm.txt"
 check ".inmate/ exists and is ignored by git" ignored_by_git
+check "managed privacy settings are in the image and parse" \
+  in_vm "jq -e '.env.DISABLE_TELEMETRY == \"1\" and .feedbackSurveyRate == 0' \
+    /etc/claude-code/managed-settings.d/10-inmate-privacy.json"
 check "refuses to run in /" refuses /
 check "refuses to run in \$HOME" refuses "$HOME"
 check "refuses a directory outside \$HOME" refuses "$outside_home"
 check "refuses a directory outside allow=" refuses "$outside"
 check "refuses a look-alike of an allowed directory" refuses "$lookalike"
-check "an empty allow= entry doesn't allow everything" with_allow ":$base/allowed" refuses "$outside"
-check "a relative allow= entry doesn't allow everything" with_allow "." refuses "$outside"
-check "refuses the directory holding inmate itself" \
-  with_allow "$root" refuses "$root/bin"
+INMATE_ALLOW=":$base/allowed" check "an empty allow= entry doesn't allow everything" refuses "$outside"
+INMATE_ALLOW=. check "a relative allow= entry doesn't allow everything" refuses "$outside"
+INMATE_ALLOW=$root check "refuses the directory holding inmate itself" refuses "$root/bin"
 
 if [ "$failures" -gt 0 ]; then
   printf '\n%d check(s) failed\n' "$failures"

@@ -46,7 +46,7 @@ confirm() {
   local answer hint='[y/N]'
   [ "$2" = y ] && hint='[Y/n]'
   read -r -p "$1 $hint " answer || answer=
-  case "${answer:-$2}" in [Yy]*) return 0 ;; *) return 1 ;; esac
+  [[ ${answer:-$2} == [Yy]* ]]
 }
 
 # Strip leading and trailing whitespace (including a CR from CRLF files) from
@@ -151,9 +151,11 @@ check_project_dir() {
   fi
 
   # A project that overlaps inmate's own files would let the VM rewrite the
-  # allowlist, the Dockerfile, or the script the host runs next time. Some of
-  # these dirs don't exist before setup, hence physical_path.
-  for dir in "$CONFIG_DIR" "$INMATE_ROOT" "$HOME/.local/bin"; do
+  # allowlist, the Dockerfile, or the script the host runs next time. That
+  # includes the directory of the symlink we were invoked through, wherever it
+  # lives, plus install.sh's default. Some of these dirs don't exist before
+  # setup, hence physical_path.
+  for dir in "$CONFIG_DIR" "$INMATE_ROOT" "$(dirname "${BASH_SOURCE[0]}")" "$HOME/.local/bin"; do
     dir=$(physical_path "$dir")
     if is_within "$dir" "$project" || is_within "$project" "$dir"; then
       die "refusing to expose '$project': it overlaps inmate's own files in $dir"
@@ -283,14 +285,14 @@ cmd_token() {
 # 00 is the base, 1x-8x are optional toolchains, 9x always come last.
 write_dockerfile() {
   local fragments="$IMAGE_DIR/fragments"
-  local picked=("$fragments/00-base.Dockerfile")
+  local picked=("$fragments"/0*.Dockerfile)
   local f label
   for f in "$fragments"/[1-8]*.Dockerfile; do
     label=$(basename "$f" .Dockerfile)
     label=${label#*-}
     if confirm "Include $label?" y; then picked+=("$f"); fi
   done
-  picked+=("$fragments/90-claude.Dockerfile")
+  picked+=("$fragments"/9*.Dockerfile)
 
   {
     # shellcheck disable=SC2016 # literal backticks
@@ -322,7 +324,8 @@ cmd_setup() {
       warn "'$projects' must be an existing directory, given as an absolute path or ~/..."
     done
     {
-      printf 'image=%s\nmemory=%s\ncpus=%s\n' "$image" "$memory" "$cpus"
+      # Defaults stay commented out so later changes to them still apply.
+      printf '# image=%s\n# memory=%s\n# cpus=%s\n' "$image" "$memory" "$cpus"
       printf '# inmate only runs inside your home directory. allow= lines narrow that\n'
       printf '# further: with any present, the project must be inside one of them.\n'
       if [ -n "$projects" ]; then
@@ -344,11 +347,7 @@ main() {
   load_config
   case "${1-}" in
     '' | -h | --help | help) usage ;;
-    setup | build | update | token)
-      local cmd=$1
-      shift
-      "cmd_$cmd" "$@"
-      ;;
+    setup | build | update | token) "cmd_$1" "${@:2}" ;;
     --)
       shift
       cmd_run "$@"

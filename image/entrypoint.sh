@@ -17,9 +17,7 @@ done
 
 # With token auth, interactive Claude still shows onboarding and a login screen
 # unless this is set (anthropics/claude-code#46259).
-if [ ! -e "$HOME/.claude.json" ]; then
-  printf '{"hasCompletedOnboarding": true}\n' > "$HOME/.claude.json"
-fi
+[ -e "$HOME/.claude.json" ] || printf '{"hasCompletedOnboarding": true}\n' > "$HOME/.claude.json"
 
 # User-level installs and caches go under HOME so they outlive the VM. They go
 # after the system PATH so nothing in the project can shadow the image's tools,
