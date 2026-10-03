@@ -45,7 +45,6 @@ Everything after the command is passed through untouched:
 inmate claude                 # Claude Code in the VM
 inmate claude --continue      # Claude's own flags work as usual
 inmate bash                   # a shell in the VM
-inmate npm test
 ```
 
 If no token is stored, `inmate` refuses to start and tells you to run `inmate setup`.
@@ -143,5 +142,3 @@ it runs.
   sessions.
 - **No Xcode.** The VM is Linux.
 - **No image paste.** The VM can't see your clipboard.
-- **Watch tools miss your edits.** Dev servers and test watchers in the VM notice Claude's
-  edits but not yours (apple/container#141). Use their polling mode or run them on the Mac.

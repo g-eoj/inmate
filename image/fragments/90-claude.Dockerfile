@@ -1,5 +1,5 @@
 # --- claude: native build, copied out of root's ~/.local so the per-project -----
-# --- HOME can't shadow it. `inmate update` changes the ARG to refresh this layer.
+# --- HOME can't shadow it. `inmate setup` always changes CLAUDE_CACHE_BUST so latest Claude Code is used.
 WORKDIR /tmp
 ARG CLAUDE_CACHE_BUST=0
 RUN curl -fsSL https://claude.ai/install.sh | bash \
