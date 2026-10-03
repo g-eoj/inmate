@@ -1,0 +1,76 @@
+#!/bin/bash
+
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+IMAGE_DIR="$ROOT/image"
+IMAGE=inmate:latest
+KEYCHAIN_SERVICE=inmate
+KEYCHAIN_ACCOUNT=claude-code-oauth-token
+
+warn() { printf 'inmate: %s\n' "$*" >&2; }
+die() { warn "$@"; exit 1; }
+
+keychain_token() {
+  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w 2>/dev/null
+}
+
+ensure_container_running() {
+  command -v container > /dev/null || die "Apple 'container' CLI not found. Install with: brew install container"
+
+  local status=0
+  perl -e 'alarm shift; exec @ARGV' 15 container system status > /dev/null 2>&1 || status=$?
+  if [ "$status" -eq 142 ]; then
+    die "'container system status' hung (apple/container#2275). Try: sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on, then reboot."
+  fi
+  if [ "$status" -ne 0 ]; then
+    warn "starting the container system service..."
+    container system start "$@"
+  fi
+}
+
+build_image() {
+  local dockerfile
+  dockerfile=$(mktemp)
+  cat "$IMAGE_DIR"/fragments/*.Dockerfile > "$dockerfile"
+  container build -t "$IMAGE" -f "$dockerfile" "$IMAGE_DIR"
+  rm -f "$dockerfile"
+}
+
+login() {
+  [ -t 0 ] && [ -t 1 ] || die "login needs an interactive terminal"
+
+  local log token
+  log=$(mktemp)
+  script -q "$log" container run --rm -it -e TERM "$IMAGE" claude setup-token || true
+  token=$(tr -d '\r' < "$log" | grep -o 'sk-ant-oat01-[A-Za-z0-9_-]*' | tail -1)
+  rm -f "$log"
+
+  case "$token" in
+    '' | *[!A-Za-z0-9_-]*) die "login failed: no token was printed"
+  esac
+
+  printf 'add-generic-password -U -s %s -a %s -w %s\n' \
+    "$KEYCHAIN_SERVICE" "$KEYCHAIN_ACCOUNT" "$token" | security -i
+  printf 'Logged in. Token stored in the Keychain.\n'
+}
+
+cmd_run() { die "cmd_run"; }
+
+cmd_setup() {
+  ensure_container_running --enable-kernel-install
+  build_image
+  keychain_token > /dev/null || login
+  printf 'Done. cd into a project and run: inmate claude\n'
+}
+
+main() {
+  case "${1-}" in
+    '' | -h | --help) printf 'usage: inmate setup | inmate <cmd> [args]\n' ;;
+    setup) cmd_setup ;;
+    -*) die "unknown option '$1'" ;;
+    *) cmd_run "$@" ;;
+  esac
+}
+
+main "$@"
