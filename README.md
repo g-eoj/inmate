@@ -83,9 +83,14 @@ SSH remotes do not work: the VM has no SSH keys.
 
 ## MCP servers on the Mac
 
-The VM reaches the Mac at the gateway address of the `container` default network
-(`container network ls` shows the subnet; the gateway is its `.1` address). Point an
-MCP server at that address in the project's `.mcp.json`:
+From inside the VM, the Mac is the network gateway. Find its address once:
+
+```sh
+container network ls        # shows the default subnet, e.g. 192.168.65.0/24
+```
+
+The gateway is the `.1` address of that subnet, `192.168.65.1` in this example. Point MCP
+servers at it in the project's `.mcp.json`:
 
 ```json
 {
@@ -95,8 +100,26 @@ MCP server at that address in the project's `.mcp.json`:
 }
 ```
 
-Only HTTP and SSE servers work. Stdio servers are child processes and cannot cross the
-VM boundary.
+Only HTTP and SSE servers can be reached this way. A stdio server is a child process that
+Claude would have to start on the Mac, which it can't do from the VM. Wrap it in a bridge
+on the Mac instead. Example for Xcode's MCP server (Xcode 26.3+, with Xcode Tools enabled
+under Settings → Intelligence and a project open):
+
+```sh
+# On the Mac, leave running:
+npx -y supergateway --stdio "xcrun mcpbridge" --port 8765 --outputTransport streamableHttp
+```
+
+```json
+{
+  "mcpServers": {
+    "xcode": { "type": "http", "url": "http://192.168.65.1:8765/mcp" }
+  }
+}
+```
+
+The bridge listens on all interfaces, so anything on your local network can reach it while
+it runs.
 
 ## How it works
 
