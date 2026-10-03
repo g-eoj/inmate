@@ -19,11 +19,7 @@ done
 # unless this is set (anthropics/claude-code#46259).
 [ -e "$HOME/.claude.json" ] || printf '{"hasCompletedOnboarding": true}\n' > "$HOME/.claude.json"
 
-# User-level installs and caches go under HOME so they outlive the VM. They go
-# after the system PATH so nothing in the project can shadow the image's tools,
-# in particular /usr/local/bin/claude.
-export NPM_CONFIG_PREFIX="$HOME/.local"
-export CARGO_HOME="$HOME/.cargo"
-export PATH="$PATH:$NPM_CONFIG_PREFIX/bin:$CARGO_HOME/bin:$HOME/go/bin"
+# Use HTTPS credentials for GitHub
+[ -n "${GH_TOKEN-}" ] && gh auth setup-git
 
 exec "$@"
