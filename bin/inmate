@@ -33,7 +33,7 @@ build_image() {
   local dockerfile
   dockerfile=$(mktemp)
   cat "$IMAGE_DIR"/fragments/*.Dockerfile > "$dockerfile"
-  container build -t "$IMAGE" -f "$dockerfile" "$IMAGE_DIR"
+  container build -t "$IMAGE" -f "$dockerfile" --build-arg CLAUDE_CACHE_BUST="$(date +%s)" "$IMAGE_DIR"
   rm -f "$dockerfile"
 }
 
