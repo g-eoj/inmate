@@ -29,5 +29,9 @@ COPY defaults.d/ /usr/local/share/inmate/defaults.d/
 RUN jq -s 'reduce .[] as $s ({}; . * $s)' /usr/local/share/inmate/defaults.d/*.json \
   > /usr/local/share/inmate/settings.json
 COPY statusline.sh /usr/local/bin/inmate-statusline
+
+# uv: for Python
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
 COPY entrypoint.sh /usr/local/bin/inmate-entrypoint
 ENTRYPOINT ["/usr/local/bin/inmate-entrypoint"]
