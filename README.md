@@ -54,8 +54,7 @@ inmate bash                   # a shell in the VM
 
 - If no Claude token is stored, `inmate` refuses to start and tells you to run
   `inmate setup`. Claude never shows its own login screen inside the VM.
-- Claude keeps its normal permission prompts. With `--dangerously-skip-permissions` it
-  runs any command without asking, but only inside the VM.
+- Claude keeps its normal permission prompts.
 
 ## GitHub
 
