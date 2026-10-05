@@ -17,7 +17,7 @@ ran `inmate` from. Your home directory, Keychain, SSH keys, and host Claude conf
 - Apple silicon Mac running macOS 26 or later
 - `brew install container`
 - A Claude Pro/Max/Team/Enterprise plan
-- Optional: `gh` installed and logged in on the Mac, for GitHub access from the VM
+- Optional: a GitHub fine-grained personal access token, for GitHub access from the VM
 
 ## Install
 
@@ -27,10 +27,11 @@ ln -s ~/projects/inmate/bin/inmate ~/.local/bin/inmate
 inmate setup
 ```
 
-`inmate setup` starts the `container` service, builds the image, and logs you in to
-Claude. The login is the only interactive step: it opens a browser URL and asks for the
-code once. The resulting token is stored in the macOS Keychain and lasts a year. Run
-`inmate setup` again to rebuild the image or log in again.
+`inmate setup` starts the `container` service, builds the image with the current Claude
+Code release, logs you in to Claude, and asks for an optional GitHub token. The Claude
+login opens a browser URL and asks for the code once. Both tokens are stored in the macOS
+Keychain; the Claude token lasts a year. Run `inmate setup` again to update Claude Code or
+log in again.
 
 ## Usage
 
@@ -76,9 +77,16 @@ The next `inmate` run starts it again.
 
 ## GitHub
 
-If `gh` is logged in on the Mac, `inmate` passes its token into the VM as `GH_TOKEN`.
-`gh` and `git push`/`fetch` over HTTPS work from inside the VM without further setup.
-SSH remotes do not work: the VM has no SSH keys.
+`inmate setup` asks for a GitHub token and stores it in the Keychain. Press Enter to skip
+if you don't need GitHub from the VM. Inside the VM, `gh` and `git push`/`fetch` over
+HTTPS use that token. SSH remotes do not work: the VM has no SSH keys.
+
+Anything running in the VM can read the token, so give it a fine-grained personal access
+token limited to the repos you work on: GitHub → Settings → Developer settings → Personal
+access tokens → Fine-grained tokens. Choose "Only select repositories", grant Contents:
+Read and write, and add Pull requests and Issues if you want `gh pr` and `gh issue`.
+
+Run `inmate setup` again to replace the token.
 
 ## MCP servers on the Mac
 
