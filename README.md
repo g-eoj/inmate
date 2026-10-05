@@ -31,17 +31,15 @@ inmate setup
 
 1. Starts the `container` service.
 2. Builds the image with the current Claude Code release.
-3. Logs you in to Claude. This opens a browser URL and asks for a code once. The token
-   is stored in the macOS Keychain and lasts a year.
-4. Asks for a GitHub token, also stored in the Keychain. Press Enter to skip.
+3. Logs you in to Claude if no token is stored, via a browser URL and a code.
+4. Asks for a GitHub token if none is stored. Press Enter to skip.
 
-Run `inmate setup` again to update Claude Code or to log in again.
+Both tokens live in the macOS Keychain. Run `inmate setup` again to update Claude Code.
+To log in again or replace a token, delete the Keychain item first:
 
-## Usage
-
-```
-inmate setup         build the image and log in (once)
-inmate <cmd> [args]  run <cmd> in the VM
+```sh
+security delete-generic-password -s inmate -a claude-code-oauth-token
+security delete-generic-password -s inmate -a github-token
 ```
 
 Everything after `inmate` is passed through untouched:
@@ -52,14 +50,13 @@ inmate claude --continue      # Claude's own flags work as usual
 inmate bash                   # a shell in the VM
 ```
 
-- If no Claude token is stored, `inmate` refuses to start and tells you to run
-  `inmate setup`. Claude never shows its own login screen inside the VM.
-- Claude keeps its normal permission prompts.
+If no Claude token is stored, `inmate` refuses to start and tells you to run
+`inmate setup`. Claude never shows its own login screen inside the VM.
 
 ## GitHub
 
-Inside the VM, `gh` and `git push`/`fetch` over HTTPS use the token from `inmate setup`.
-SSH remotes do not work: the VM has no SSH keys.
+Inside the VM, `gh` and HTTPS git remotes use the token from `inmate setup`. SSH remotes
+do not work: the VM has no SSH keys.
 
 Anything running in the VM can read the token, so scope it to the repos you work on:
 
@@ -69,8 +66,6 @@ Anything running in the VM can read the token, so scope it to the repos you work
 3. Under Permissions, grant Contents: Read and write. Add Pull requests and Issues if
    you want `gh pr` and `gh issue`.
 4. Run `inmate setup` and paste the token when asked.
-
-Run `inmate setup` again to replace the token.
 
 ## MCP servers on the Mac
 
@@ -95,28 +90,36 @@ on the Mac are reachable.
 
 A stdio server is a child process that Claude would have to start on the Mac, which it
 can't do from the VM. Wrap it in an HTTP bridge on the Mac instead. Example for Xcode's
-MCP server, which needs Xcode 26.3+, Xcode Tools enabled under Settings → Intelligence,
-and a project open:
+MCP server:
 
-1. On the Mac, start the bridge and leave it running:
+```sh
+npx -y supergateway --stdio "xcrun mcpbridge" --port 8765 --outputTransport streamableHttp
+```
 
-   ```sh
-   npx -y supergateway --stdio "xcrun mcpbridge" --port 8765 --outputTransport streamableHttp
-   ```
+Then add it to `.mcp.json` as above, with port 8765. The bridge listens on all
+interfaces with no authentication. While it runs, the VM and anything else on your local
+network can drive Xcode on your Mac through it. That is a deliberate hole in the
+isolation. Stop the bridge when you are done.
 
-2. Add it to the project's `.mcp.json`:
+## Claude settings
 
-   ```json
-   {
-     "mcpServers": {
-       "xcode": { "type": "http", "url": "http://192.168.65.1:8765/mcp" }
-     }
-   }
-   ```
+The image carries two kinds of Claude Code settings.
 
-The bridge listens on all interfaces with no authentication. While it runs, the VM and
-anything else on your local network can drive Xcode on your Mac through it. That is a
-deliberate hole in the isolation. Stop the bridge when you are done.
+**Managed settings** (`image/managed-settings.d/`) are policy. They outrank every project
+and user setting and can't be changed from inside the VM. The one shipped here turns off
+telemetry, error reporting, feedback, nonessential traffic, and auto-updates.
+
+**User defaults** (`image/defaults.d/`) are opinionated examples, meant to be edited or
+deleted before you build. The `*.json` files are merged in name order into one user
+settings file, which is copied to `<project>/.inmate/home/.claude/settings.json` the
+first time you run `inmate` in a project and never again. The shipped examples set:
+
+- `10-inmate-models.json`: Opus, xhigh effort, high effort for Fable
+- `20-inmate-plugins.json`: three official plugins
+- `90-inmate-misc.json`: vim editor mode, no commit or PR attribution
+
+To change the defaults, edit or remove the files and run `inmate setup`. To reseed a
+project, delete its `settings.json`.
 
 ## Cleaning up
 
@@ -129,8 +132,7 @@ container rm -f <name>
 ```
 
 `inmate setup` starts the `container` background service, which keeps running after you
-exit. It is small on its own; the VMs exist only while an `inmate` command runs. To stop
-it:
+exit. To stop it:
 
 ```sh
 container system stop
@@ -147,9 +149,6 @@ The next `inmate` run starts it again.
   project. Git ignores `.inmate/` without changes to your own ignore files.
 - **Root inside the VM.** `container` mounts have no UID mapping, so every file appears
   root-owned inside the VM. Files Claude creates are owned by you on the Mac.
-- **Privacy settings are locked.** The image carries a Claude Code managed settings file
-  that turns off telemetry, error reporting, feedback surveys, and auto-updates. Managed
-  settings outrank every project and user setting.
 
 ## Known limitations
 
@@ -157,8 +156,7 @@ The next `inmate` run starts it again.
   internet, your local network, and any service on the Mac that listens on all
   interfaces. Services bound to `127.0.0.1` are not reachable.
 - **The tokens are readable inside the VM.** Anything running in the VM can read the
-  Claude and GitHub tokens from the environment. Revoke them in your Claude and GitHub
-  account settings if needed.
+  Claude and GitHub tokens from the environment.
 - **Claude can still damage the project**, including `.git`. Commit before long
   unattended sessions.
 - **No Xcode.** The VM is Linux.
