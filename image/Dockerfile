@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      build-essential ca-certificates curl file gh git jq less openssh-client \
+      ca-certificates curl file gh git jq less \
       procps ripgrep tzdata unzip xz-utils \
  && rm -rf /var/lib/apt/lists/*
 
