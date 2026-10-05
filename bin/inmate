@@ -58,7 +58,7 @@ login() {
   local log token
   log=$(mktemp)
   script -q "$log" container run --rm -it -e TERM "$IMAGE" claude setup-token || true
-  token=$(tr -d '\r' < "$log" | grep -o 'sk-ant-oat01-[A-Za-z0-9_-]*' | tail -1)
+  token=$(tr -d '\r' < "$log" | grep -o 'sk-ant-oat01-[A-Za-z0-9_-]*' | tail -1) || true
   rm -f "$log"
 
   case "$token" in
