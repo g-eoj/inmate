@@ -1,8 +1,8 @@
 # --- claude: native build, copied out of root's ~/.local so the per-project -----
-# --- HOME can't shadow it. `inmate setup` always changes CLAUDE_CACHE_BUST so latest Claude Code is used.
+# --- HOME can't shadow it.
 WORKDIR /tmp
-ARG CLAUDE_CACHE_BUST=0
-RUN curl -fsSL https://claude.ai/install.sh | bash \
+ARG CLAUDE_VERSION
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "$CLAUDE_VERSION" \
  && cp -L /root/.local/bin/claude /usr/local/bin/claude \
  && rm -rf /root/.local /root/.claude /root/.claude.json \
  && claude --version
