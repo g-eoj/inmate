@@ -28,5 +28,6 @@ COPY defaults.d/ /usr/local/share/inmate/defaults.d/
 # Merge user defaults; a malformed JSON fails the build
 RUN jq -s 'reduce .[] as $s ({}; . * $s)' /usr/local/share/inmate/defaults.d/*.json \
   > /usr/local/share/inmate/settings.json
+COPY statusline.sh /usr/local/bin/inmate-statusline
 COPY entrypoint.sh /usr/local/bin/inmate-entrypoint
 ENTRYPOINT ["/usr/local/bin/inmate-entrypoint"]

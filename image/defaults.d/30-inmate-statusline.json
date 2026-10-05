@@ -1,0 +1,7 @@
+{
+  "statusLine": { 
+    "type": "command",
+    "command": "inmate-statusline",
+    "hideVimModeIndicator": true
+  }
+}
