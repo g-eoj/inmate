@@ -140,6 +140,15 @@ container system stop
 
 The next `inmate` run starts it again.
 
+`container` keeps a build cache in a separate builder VM that grows with every image
+build and is never trimmed. Check with `container system df` and reclaim the space with:
+
+```sh
+container builder delete --force
+```
+
+The next `inmate setup` recreates it.
+
 ## How it works
 
 - **Same paths.** The project is mounted at the same absolute path inside the VM, so
