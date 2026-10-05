@@ -6,18 +6,14 @@ ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 IMAGE_DIR="$ROOT/image"
 IMAGE=inmate:latest
 KEYCHAIN_SERVICE=inmate
-KEYCHAIN_ACCOUNT=claude-code-oauth-token
+CLAUDE_ACCOUNT=claude-code-oauth-token
 GITHUB_ACCOUNT=github-token
 
 warn() { printf 'inmate: %s\n' "$*" >&2; }
 die() { warn "$@"; exit 1; }
 
 keychain_token() {
-  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w 2>/dev/null
-}
-
-github_token() {
-  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$GITHUB_ACCOUNT" -w 2>/dev/null
+  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$1" -w 2>/dev/null
 }
 
 ensure_container_running() {
@@ -47,8 +43,8 @@ build_image() {
   container build -t "$IMAGE" --build-arg CLAUDE_VERSION="$version" "$IMAGE_DIR" > /dev/null
 }
 
-login() {
-  [ -t 0 ] && [ -t 1 ] || die "login needs an interactive terminal"
+claude_login() {
+  [ -t 0 ] && [ -t 1 ] || die "Claude login needs an interactive terminal"
 
   local log token
   log=$(mktemp)
@@ -57,11 +53,11 @@ login() {
   rm -f "$log"
 
   case "$token" in
-    '' | *[!A-Za-z0-9_-]*) die "login failed: no token was printed" ;;
+    '' | *[!A-Za-z0-9_-]*) die "Claude login failed: no token was printed" ;;
   esac
 
   printf 'add-generic-password -U -s %s -a %s -w %s\n' \
-    "$KEYCHAIN_SERVICE" "$KEYCHAIN_ACCOUNT" "$token" | security -i
+    "$KEYCHAIN_SERVICE" "$CLAUDE_ACCOUNT" "$token" | security -i
   printf 'Logged in. Token stored in the Keychain.\n'
 }
 
@@ -92,8 +88,8 @@ cmd_run() {
 
   ensure_container_running 
   container image inspect "$IMAGE" > /dev/null 2>&1 || die "image not built; run inmate setup"
-  CLAUDE_CODE_OAUTH_TOKEN=$(keychain_token) || die "not logged in; run inmate setup"
-  GH_TOKEN=$(github_token) || GH_TOKEN=
+  CLAUDE_CODE_OAUTH_TOKEN=$(keychain_token "$CLAUDE_ACCOUNT") || die "not logged in; run inmate setup"
+  GH_TOKEN=$(keychain_token "$GITHUB_ACCOUNT") || GH_TOKEN=
 
   local args=(run --rm -it --name "inmate-$RANDOM$RANDOM" -v "$project:$project" -w "$project")
   local var
@@ -113,8 +109,8 @@ cmd_run() {
 cmd_setup() {
   ensure_container_running --enable-kernel-install
   build_image
-  keychain_token > /dev/null || login
-  github_token > /dev/null || github_login
+  keychain_token "$CLAUDE_ACCOUNT" > /dev/null || claude_login
+  keychain_token "$GITHUB_ACCOUNT" > /dev/null || github_login
   printf 'Setup complete.\n'
 }
 
