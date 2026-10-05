@@ -19,6 +19,11 @@ done
 # unless this is set (anthropics/claude-code#46259).
 [ -e "$HOME/.claude.json" ] || printf '{"hasCompletedOnboarding": true}\n' > "$HOME/.claude.json"
 
+# Seed default user settings once
+mkdir -p "$HOME/.claude"
+settings="$HOME/.claude/settings.json"
+[ -e "$settings" ] || cp /usr/local/share/inmate/settings.json "$settings"
+
 # Use HTTPS credentials for GitHub
 [ -n "${GH_TOKEN-}" ] && gh auth setup-git
 

@@ -1,4 +1,4 @@
-# --- base: Debian + the CLI tools Claude Code expects -------------------------
+# base: Debian + the CLI tools Claude Code expects
 FROM debian:trixie-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -11,8 +11,8 @@ RUN apt-get update \
       procps ripgrep tzdata unzip xz-utils \
  && rm -rf /var/lib/apt/lists/*
 
-# --- claude: native build, copied out of root's ~/.local so the per-project -----
-# --- HOME can't shadow it.
+# claude: native build, copied out of root's ~/.local
+# so the per-project HOME can't shadow it.
 WORKDIR /tmp
 ARG CLAUDE_VERSION
 RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "$CLAUDE_VERSION" \
@@ -20,10 +20,13 @@ RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "$CLAUDE_VERSION" \
  && rm -rf /root/.local /root/.claude /root/.claude.json \
  && claude --version
 
-# Claude policy lives in managed settings, which outrank every project and user
-# setting: privacy (no telemetry, error reports, surveys, or feedback) and no
-# auto-updates, since updates come from rebuilding the image. Each run starts a
-# fresh VM, so a session can't make edits to /etc stick.
+# Claude policy lives in managed settings, which outrank every project and user setting
 COPY managed-settings.d/ /etc/claude-code/managed-settings.d/
+# Claude user defaults seed new projects exactly one time,
+# delete .inmate/home/.claude/settings.json to reseed.
+COPY defaults.d/ /usr/local/share/inmate/defaults.d/
+# Merge user defaults; a malformed JSON fails the build
+RUN jq -s 'reduce .[] as $s ({}; . * $s)' /usr/local/share/inmate/defaults.d/*.json \
+  > /usr/local/share/inmate/settings.json
 COPY entrypoint.sh /usr/local/bin/inmate-entrypoint
 ENTRYPOINT ["/usr/local/bin/inmate-entrypoint"]
