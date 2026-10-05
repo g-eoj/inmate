@@ -53,6 +53,16 @@ inmate bash                   # a shell in the VM
 If no Claude token is stored, `inmate` refuses to start and tells you to run
 `inmate setup`. Claude never shows its own login screen inside the VM.
 
+The VM gets 4 CPUs and up to 8 GB of memory by default. Memory is a ceiling, not a
+reservation: the host only commits what the VM actually uses. Override either with an
+environment variable:
+
+```sh
+INMATE_MEMORY=4G inmate claude
+```
+
+`INMATE_CPUS` works the same way. Memory takes a `K`, `M`, `G`, or `T` suffix.
+
 ## GitHub
 
 Inside the VM, `gh` and HTTPS git remotes use the token from `inmate setup`. SSH remotes
