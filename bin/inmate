@@ -110,7 +110,8 @@ cmd_run() {
 
   local var
   for var in CLAUDE_CODE_OAUTH_TOKEN GH_TOKEN TERM \
-    GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL; do
+    GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
+    ${INMATE_ENV-}; do
     if [ -n "${!var-}" ]; then
       export "${var?}"
       args+=(-e "$var")
