@@ -7,6 +7,7 @@ IMAGE_DIR="$ROOT/image"
 IMAGE=inmate:latest
 INMATE_CPUS="${INMATE_CPUS:-4}"
 INMATE_MEMORY="${INMATE_MEMORY:-8G}"  # upper bound, used lazily
+INMATE_SHADOW_DIRS="${INMATE_SHADOW_DIRS:-.venv .build}"
 KEYCHAIN_SERVICE=inmate
 CLAUDE_ACCOUNT=claude-code-oauth-token
 GITHUB_ACCOUNT=github-token
@@ -94,6 +95,15 @@ cmd_run() {
   GH_TOKEN=$(keychain_token "$GITHUB_ACCOUNT") || GH_TOKEN=
 
   local args=(run --rm -it -c "$INMATE_CPUS" -m "$INMATE_MEMORY" --name "inmate-$RANDOM$RANDOM" -v "$project:$project" -w "$project")
+
+  local dir src
+  for dir in $INMATE_SHADOW_DIRS; do
+    src="$project/.inmate/shadow/$dir"
+    mkdir -p "$src"
+    [ "$(realpath "$src")" = "$src" ] || die "refusing symlinked shadow dir: '$src'"
+    args+=(-v "$src:$project/$dir")
+  done
+
   local var
   for var in CLAUDE_CODE_OAUTH_TOKEN GH_TOKEN TERM; do
     if [ -n "${!var-}" ]; then
