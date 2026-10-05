@@ -35,21 +35,16 @@ ensure_container_running() {
 }
 
 build_image() {
-  local dockerfile version
-
-  dockerfile=$(mktemp)
-  cat "$IMAGE_DIR"/fragments/*.Dockerfile > "$dockerfile"
-
-  # no dangling images
-  container image delete "$IMAGE" > /dev/null 2>&1 || true
-
+  local version
   version=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest) || die "could not look up the Claude Code version"
   case "$version" in
     *[!0-9.]*|'') die "unexpected Claude Code version: '$version'" ;;
   esac
-  container build -t "$IMAGE" -f "$dockerfile" --build-arg CLAUDE_VERSION="$version" "$IMAGE_DIR" > /dev/null
 
-  rm -f "$dockerfile"
+  # no dangling images
+  container image delete "$IMAGE" > /dev/null 2>&1 || true
+
+  container build -t "$IMAGE" --build-arg CLAUDE_VERSION="$version" "$IMAGE_DIR" > /dev/null
 }
 
 login() {
