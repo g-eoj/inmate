@@ -87,7 +87,9 @@ shadowed:
 INMATE_SHADOW_DIRS=".venv node_modules" inmate claude
 ```
 
-The image ships `uv` and `uvx` for Python projects.
+The image ships `uv` and `uvx` for Python projects. The uv cache lives on the VM's
+ephemeral disk, so it does not persist between runs and never duplicates the venv under
+`.inmate/`. Managed Python installs do persist, under `.inmate/home/.local/share/uv`.
 
 ## GitHub
 
@@ -195,8 +197,8 @@ The next `inmate setup` recreates it.
   file paths match what you see on your Mac. The only exception is the
   [shadow directories](#shadow-directories), which point at `.inmate/shadow/` instead.
 - **Fresh VM, persistent state.** Each run starts a new VM. `HOME` is
-  `<project>/.inmate/home`, so Claude's config, history, and tool caches persist per
-  project. Git ignores `.inmate/` without changes to your own ignore files.
+  `<project>/.inmate/home`, so Claude's config and history persist per project.
+  Git ignores `.inmate/` without changes to your own ignore files.
 - **Root inside the VM.** `container` mounts have no UID mapping, so every file appears
   root-owned inside the VM. Files Claude creates are owned by you on the Mac.
 

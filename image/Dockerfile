@@ -30,6 +30,10 @@ RUN jq -s 'reduce .[] as $s ({}; . * $s)' /usr/local/share/inmate/defaults.d/*.j
 COPY statusline.sh /usr/local/bin/inmate-statusline
 
 # uv: for Python
+# Default cache settings double .inmate disk storage usage.
+# So keep cache on ephemeral disk. venv is still kept in .inmate.
+ENV UV_CACHE_DIR=/var/cache/uv \
+  UV_LINK_MODE=copy
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 COPY entrypoint.sh /usr/local/bin/inmate-entrypoint
