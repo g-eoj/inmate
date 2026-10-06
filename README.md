@@ -34,7 +34,8 @@ inmate setup
 3. Logs you in to Claude if no token is stored, via a browser URL and a code.
 4. Asks for a GitHub token if none is stored. Press Enter to skip.
 
-Both tokens live in the macOS Keychain. Run `inmate setup` again to update Claude Code.
+Both tokens live in the macOS Keychain. Run `inmate setup` again to update Claude Code
+and `uv`, which are both fetched at build time.
 To log in again or replace a token, delete the Keychain item first:
 
 ```sh
@@ -63,10 +64,39 @@ INMATE_MEMORY=4G inmate claude
 
 `INMATE_CPUS` works the same way. Memory takes a `K`, `M`, `G`, or `T` suffix.
 
+To forward other host environment variables into the VM, list them in `INMATE_ENV`:
+
+```sh
+INMATE_ENV="MODAL_PROXY_API_KEY MODAL_TOKEN_ID MODAL_TOKEN_SECRET" inmate claude
+```
+
+Anything forwarded is readable by everything running in the VM, like the tokens.
+
+## Shadow directories
+
+Build output such as a Python virtualenv contains Linux binaries inside the VM and Mac
+binaries on the host. The two can't share a directory, so `inmate` shadows `.venv` and
+`.build`: inside the VM each is a mount of `<project>/.inmate/shadow/<dir>`, while on
+the Mac the project's own `.venv` and `.build` are untouched. The shadow copies live
+under `.inmate/`, so git ignores them.
+
+Set `INMATE_SHADOW_DIRS` to a space-separated list to change which directories are
+shadowed:
+
+```sh
+INMATE_SHADOW_DIRS=".venv node_modules" inmate claude
+```
+
+The image ships `uv` and `uvx` for Python projects.
+
 ## GitHub
 
 Inside the VM, `gh` and HTTPS git remotes use the token from `inmate setup`. SSH remotes
 do not work: the VM has no SSH keys.
+
+Commits made in the VM carry your host identity. `inmate` reads `user.name` and
+`user.email` from `git config` on the Mac and forwards them as `GIT_AUTHOR_*` and
+`GIT_COMMITTER_*`. If those variables are already set in your shell, they win.
 
 Anything running in the VM can read the token, so scope it to the repos you work on:
 
@@ -162,7 +192,8 @@ The next `inmate setup` recreates it.
 ## How it works
 
 - **Same paths.** The project is mounted at the same absolute path inside the VM, so
-  file paths match what you see on your Mac.
+  file paths match what you see on your Mac. The only exception is the
+  [shadow directories](#shadow-directories), which point at `.inmate/shadow/` instead.
 - **Fresh VM, persistent state.** Each run starts a new VM. `HOME` is
   `<project>/.inmate/home`, so Claude's config, history, and tool caches persist per
   project. Git ignores `.inmate/` without changes to your own ignore files.
@@ -175,8 +206,11 @@ The next `inmate setup` recreates it.
   internet, your local network, and any service on the Mac that listens on all
   interfaces. Services bound to `127.0.0.1` are not reachable.
 - **The tokens are readable inside the VM.** Anything running in the VM can read the
-  Claude and GitHub tokens from the environment.
+  Claude and GitHub tokens, and anything listed in `INMATE_ENV`, from the environment.
 - **Claude can still damage the project**, including `.git`. Commit before long
   unattended sessions.
+- **Empty shadow directories appear on the Mac.** Mounting `.venv` and `.build` creates
+  them in the project if they don't exist. They stay empty on the host; the contents
+  live in `.inmate/shadow/`.
 - **No Xcode.** The VM is Linux.
 - **No image paste.** The VM can't see your clipboard.
