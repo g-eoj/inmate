@@ -1,13 +1,13 @@
 # inmate
 
-![inmate demo](assets/inmate.gif)
-
 Run Claude Code in an Apple container VM that sees only your project directory.
 
 ```sh
 cd ~/projects/some-app
 inmate claude
 ```
+
+![inmate demo](assets/inmate.gif)
 
 `inmate` uses Apple's [`container`](https://github.com/apple/container), which runs each
 container in its own lightweight VM. The VM is given one host directory: the one you ran
@@ -77,13 +77,11 @@ Anything forwarded is readable by everything running in the VM, like the tokens.
 ## Shadow directories
 
 Build output such as a Python virtualenv contains Linux binaries inside the VM and Mac
-binaries on the host. The two can't share a directory, so `inmate` shadows `.venv` and
-`.build`: inside the VM each is a mount of `<project>/.inmate/shadow/<dir>`, while on
-the Mac the project's own `.venv` and `.build` are untouched. The shadow copies live
-under `.inmate/`, so git ignores them.
+binaries on the host. The two can't share a directory: inside the VM each is a mount of
+`<project>/.inmate/shadow/<dir>`, while on the Mac the project's own `<dir>` is untouched.
+The shadow copies live under `.inmate/`, so git ignores them.
 
-Set `INMATE_SHADOW_DIRS` to a space-separated list to change which directories are
-shadowed:
+Set `INMATE_SHADOW_DIRS` to a space-separated list to change which directories are shadowed:
 
 ```sh
 INMATE_SHADOW_DIRS=".venv node_modules" inmate claude
@@ -213,8 +211,7 @@ The next `inmate setup` recreates it.
   Claude and GitHub tokens, and anything listed in `INMATE_ENV`, from the environment.
 - **Claude can still damage the project**, including `.git`. Commit before long
   unattended sessions.
-- **Empty shadow directories appear on the Mac.** Mounting `.venv` and `.build` creates
-  them in the project if they don't exist. They stay empty on the host; the contents
-  live in `.inmate/shadow/`.
+- **Empty shadow directories appear on the Mac.** Mounting creates them in the project
+  if they don't exist. They stay empty on the host; the contents live in `.inmate/shadow/`.
 - **No Xcode.** The VM is Linux.
 - **No image paste.** The VM can't see your clipboard.
