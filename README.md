@@ -1,5 +1,7 @@
 # inmate
 
+![inmate demo](assets/inmate.gif)
+
 Run Claude Code in an Apple container VM that sees only your project directory.
 
 ```sh
