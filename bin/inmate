@@ -98,7 +98,8 @@ cmd_run() {
   : "${GIT_COMMITTER_NAME:=$GIT_AUTHOR_NAME}"
   : "${GIT_COMMITTER_EMAIL:=$GIT_AUTHOR_EMAIL}"
 
-  local args=(run --rm -it -c "$INMATE_CPUS" -m "$INMATE_MEMORY" --name "inmate-$RANDOM$RANDOM" -v "$project:$project" -w "$project")
+  name="inmate-$$-$RANDOM"  # global: the traps run outside cmd_run's scope
+  local args=(run --rm -it -c "$INMATE_CPUS" -m "$INMATE_MEMORY" --name "$name" -v "$project:$project" -w "$project")
 
   local dir src
   for dir in $INMATE_SHADOW_DIRS; do
@@ -119,9 +120,13 @@ cmd_run() {
   done
 
   saved_tty=$(stty -g)
-  trap 'stty "$saved_tty"' exit
+  trap 'stty "$saved_tty" 2>/dev/null || true; container stop "$name" > /dev/null 2>&1 || true' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   stty -onlcr
-  container "${args[@]}" "$IMAGE" "$@"
+  container "${args[@]}" "$IMAGE" "$@" <&0 &
+  wait $!
 }
 
 cmd_setup() {
