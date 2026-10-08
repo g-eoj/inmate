@@ -11,8 +11,6 @@ eval "$(jq -r '
   @sh "pct=\(.context_window.used_percentage // 0 | floor)",
   @sh "size=\(.context_window.context_window_size // 200000)",
   @sh "tokens=\((.context_window.total_input_tokens // 0) + (.context_window.total_output_tokens // 0))",
-  @sh "pr=\(.pr.number // "")",
-  @sh "agent=\(.agent.name // "")",
   @sh "vim=\(.vim.mode // "")"
 ' <<< "$input") "
 
@@ -49,8 +47,6 @@ line="${cyan}inmate: ${reset}${bold}${magenta}${model}${reset}"
 line+="${sep}${effort}${reset}"
 line+="${sep}${bar_color}${bar}${reset} ${pct}%"
 line+="${sep}$(fmt_tokens "$tokens")/$(fmt_tokens "$size") tok"
-[ -n "$pr" ] && line+="${sep}${yellow}PR #${pr}${reset}"
-[ -n "$agent" ] && line+="${sep}${cyan}⚙ ${agent}${reset}"
 if [ -n "$vim" ]; then
   case "$vim" in
     INSERT) vim_color=$green ;;
