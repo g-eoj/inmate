@@ -91,10 +91,16 @@ The image ships `uv` and `uvx` for Python projects. The uv cache lives on the VM
 ephemeral disk, so it does not persist between runs and never duplicates the venv under
 `.inmate/`. Managed Python installs do persist, under `.inmate/home/.local/share/uv`.
 
+There is no system Python. `python` and `python3` are shims for `uv run python`, so in a
+uv project they use the project's venv, and elsewhere a uv-managed Python, downloaded on
+first use. There is no `pip`; use `uv add` or `uv pip`.
+
 ## GitHub
 
-Inside the VM, `gh` and HTTPS git remotes use the token from `inmate setup`. SSH remotes
-do not work: the VM has no SSH keys.
+Inside the VM, `gh` and HTTPS git remotes use the token from `inmate setup`. The VM has
+no SSH keys, so git rewrites GitHub SSH remotes (`git@github.com:` and
+`ssh://git@github.com/`) to HTTPS. The project's `.git/config` is untouched, so the
+remote stays SSH on your Mac. SSH remotes on other hosts do not work.
 
 Commits made in the VM carry your host identity. `inmate` reads `user.name` and
 `user.email` from `git config` on the Mac and forwards them as `GIT_AUTHOR_*` and

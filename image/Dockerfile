@@ -22,12 +22,21 @@ RUN curl -fsSL -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
   && rm -rf /var/lib/apt/lists/* \
   && gh --version
 
+# git: use https always (no ssh)
+RUN git config --system url."https://github.com/".insteadOf "git@github.com:" \
+  && git config --system --add url."https://github.com/".insteadOf "ssh://git@github.com/"
+
 # uv: for Python
 # Default cache settings double .inmate disk storage usage.
 # So keep cache on ephemeral disk. venv is still kept in .inmate.
 ENV UV_CACHE_DIR=/var/cache/uv \
   UV_LINK_MODE=copy
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# use uv for python/python3 calls
+RUN printf '#!/bin/sh\nexec uv run python "$@"\n' > /usr/local/bin/python3 \
+  && chmod +x /usr/local/bin/python3 \
+  && ln -s python3 /usr/local/bin/python
+ENV UV_PYTHON_PREFERENCE=only-managed
 
 # claude: native build, copied out of root's ~/.local
 # so the per-project HOME can't shadow it.
