@@ -34,16 +34,27 @@ ensure_container_running() {
 }
 
 build_image() {
-  local version
-  version=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest) || die "could not look up the Claude Code version"
-  case "$version" in
-    *[!0-9.]*|'') die "unexpected Claude Code version: '$version'" ;;
+  local claude_version
+  claude_version=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest) || die "could not look up the Claude Code version"
+  case "$claude_version" in
+    *[!0-9.]*|'') die "unexpected Claude Code version: '$claude_version'" ;;
+  esac
+
+  local gh_version
+  gh_version=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest) \
+    || die "could not look up the gh version"
+  gh_version=${gh_version##*/v}
+  case "$gh_version" in
+    *[!0-9.]*|'') die "unexpected gh version: '$gh_version'" ;;
   esac
 
   # no dangling images
   container image delete "$IMAGE" > /dev/null 2>&1 || true
 
-  container build -t "$IMAGE" --build-arg CLAUDE_VERSION="$version" "$IMAGE_DIR" > /dev/null
+  container build -t "$IMAGE" \
+    --build-arg CLAUDE_VERSION="$claude_version" \
+    --build-arg GH_VERSION="$gh_version" \
+    "$IMAGE_DIR" > /dev/null
 }
 
 claude_login() {
