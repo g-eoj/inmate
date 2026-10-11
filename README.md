@@ -32,12 +32,12 @@ inmate setup
 `inmate setup` does four things:
 
 1. Starts the `container` service.
-2. Builds the image with the current Claude Code release.
+2. Builds the image with the current Claude Code, `gh` and `uv` releases.
 3. Logs you in to Claude if no token is stored, via a browser URL and a code.
 4. Asks for a GitHub token if none is stored. Press Enter to skip.
 
-Both tokens live in the macOS Keychain. Run `inmate setup` again to update Claude Code
-and `uv`, which are both fetched at build time.
+Both tokens live in the macOS Keychain. Run `inmate setup` again to update Claude Code,
+`gh` and `uv`, which are all fetched at build time.
 To log in again or replace a token, delete the Keychain item first:
 
 ```sh
