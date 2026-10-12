@@ -20,6 +20,7 @@ config. It does have normal network access; see [Known limitations](#known-limit
 - `brew install container`
 - A Claude Pro, Max, Team, or Enterprise plan
 - Optional: a GitHub fine-grained personal access token, for GitHub access from the VM
+- Optional: Xcode and `brew install socat`, for the [Xcode bridge](#xcode)
 
 ## Install
 
@@ -120,10 +121,11 @@ Anything running in the VM can read the token, so scope it to the repos you work
 From inside the VM, the Mac is the network gateway, so HTTP and SSE MCP servers running
 on the Mac are reachable.
 
-1. Find the gateway address once. It is the `.1` address of the default subnet:
+1. Find the gateway address. It differs between Macs, so look it up rather than
+   copying one:
 
    ```sh
-   container network ls        # e.g. 192.168.65.0/24, so the gateway is 192.168.65.1
+   container network inspect default    # status.ipv4Gateway, e.g. 192.168.64.1
    ```
 
 2. Point the server at it in the project's `.mcp.json`:
@@ -131,31 +133,81 @@ on the Mac are reachable.
    ```json
    {
      "mcpServers": {
-       "example": { "type": "http", "url": "http://192.168.65.1:3000/mcp" }
+       "example": { "type": "http", "url": "http://192.168.64.1:3000/mcp" }
      }
    }
    ```
 
 A stdio server is a child process that Claude would have to start on the Mac, which it
-can't do from the VM. Wrap it in an HTTP bridge on the Mac instead. Example for Xcode's
-MCP server:
+can't do from the VM. It needs a bridge on the Mac, as `inmate` sets up for
+[Xcode](#xcode).
+
+## Xcode
+
+The VM is Linux, so it can't build or run Xcode itself. It can use the MCP server that
+Xcode runs on the Mac, `xcrun mcpbridge`, through a bridge that `inmate` starts:
 
 ```sh
-npx -y supergateway --stdio "xcrun mcpbridge" --port 8765 --outputTransport streamableHttp
+INMATE_XCODE_BRIDGE=1 inmate claude
 ```
 
-Then add it to `.mcp.json` as above, with port 8765. The bridge listens on all
-interfaces with no authentication. While it runs, the VM and anything else on your local
-network can drive Xcode on your Mac through it. That is a deliberate hole in the
-isolation. Stop the bridge when you are done.
+Claude then has an `Xcode` MCP server. Xcode must be running on the Mac.
+
+Before Claude can use Xcode's tools, it has to open or create a project, and Xcode asks
+on the Mac whether to allow it. Until then, the tools fail with "This agent isn't
+approved". Xcode remembers the approval for later sessions.
+
+The first time, install `socat` on the Mac and rebuild the image, which also ships `socat`:
+
+```sh
+brew install socat
+inmate setup
+```
+
+If the macOS firewall is on, it asks whether `socat1` may accept incoming connections.
+Allow it, or the VM's connections are silently dropped and Claude reports
+`CONNECTION_CLOSED`. `socat1` is the program Homebrew's `socat` links to. The approval
+covers every use of `socat` on the Mac, not just this bridge, and it may be asked again
+after `brew upgrade socat`. To approve it from the command line:
+
+```sh
+fw=/usr/libexec/ApplicationFirewall/socketfilterfw
+sudo $fw --add "$(realpath "$(command -v socat)")"
+sudo $fw --unblockapp "$(realpath "$(command -v socat)")"
+```
+
+How it works:
+
+- **On the Mac,** `socat` listens on the first free port from 8765 and starts a new
+  `xcrun mcpbridge` for each connection. It accepts connections only from the container
+  subnet, which it reads from `container network inspect default`. Each session started
+  with the flag gets its own bridge, which stops when that session exits.
+- **In the VM,** the entrypoint registers `Xcode` as a user-scoped stdio server that runs
+  `socat` to connect to the bridge. If you already have a user-scoped server named
+  `Xcode`, it is kept and the bridge is not registered. Without the flag, a managed
+  setting blocks the server, so Claude doesn't start it.
+
+Set `INMATE_XCODE_BRIDGE_PORT` to change the first port tried. `inmate` tries it and the
+next 19.
+
+The bridge has no authentication, and Xcode's approval isn't tied to one VM. Anything on
+the container subnet can use it, including `inmate` VMs started without the flag and any
+other containers. Xcode's tools aren't limited to the mounted project either: they can
+see every project open in Xcode. Through the bridge, code in the VM can run code on your
+Mac, for example by adding a Run Script build phase to the project and asking Xcode to
+build. That is a deliberate hole in the isolation; leave the flag off when you don't
+need it.
 
 ## Claude settings
 
 The image carries two kinds of Claude Code settings.
 
 **Managed settings** (`image/managed-settings.d/`) are policy. They outrank every project
-and user setting and can't be changed from inside the VM. The one shipped here turns off
-telemetry, error reporting, feedback, nonessential traffic, and auto-updates.
+and user setting, so Claude's own settings can't override them. They aren't
+tamper-proof: code in the VM runs as root and can change them, but every run starts
+again from the image. `10-inmate-privacy.json` turns off telemetry, error reporting,
+feedback, and auto-updates. `50-inmate-xcode-off.json` blocks the [Xcode](#xcode) server
+unless the bridge is on.
 
 **User defaults** (`image/defaults.d/`) are opinionated examples, meant to be edited or
 deleted before you build. The `*.json` files are merged in name order into one user
@@ -163,7 +215,9 @@ settings file, which is copied to `<project>/.inmate/home/.claude/settings.json`
 first time you run `inmate` in a project and never again. The shipped examples set:
 
 - `10-inmate-models.json`: Opus, xhigh effort, high effort for Fable
-- `20-inmate-plugins.json`: three official plugins
+- `20-inmate-plugins.json`: two official plugins, the learning output style and the PR
+  review toolkit
+- `30-inmate-statusline.json`: the `inmate` status line
 - `90-inmate-misc.json`: vim editor mode, no commit or PR attribution
 
 To change the defaults, edit or remove the files and run `inmate setup`. To reseed a
@@ -219,5 +273,6 @@ The next `inmate setup` recreates it.
   unattended sessions.
 - **Empty shadow directories appear on the Mac.** Mounting creates them in the project
   if they don't exist. They stay empty on the host; the contents live in `.inmate/shadow/`.
-- **No Xcode.** The VM is Linux.
+- **No Xcode toolchain.** The VM is Linux. Claude can use Xcode on the Mac only through
+  its MCP tools; see [Xcode](#xcode).
 - **No image paste.** The VM can't see your clipboard.
