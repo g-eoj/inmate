@@ -92,6 +92,17 @@ github_login() {
   esac
 }
 
+check_xcode_conflicts() {
+  local project=$1
+  if jq -e '.mcpServers.Xcode' "$project/.mcp.json" > /dev/null 2>&1; then
+    die "$project/.mcp.json defines an Xcode MCP server that conflicts with the Xcode bridge"
+  fi
+  if jq -e --arg p "$project" '.projects[$p].mcpServers.Xcode' \
+    "$project/.inmate/home/.claude.json" > /dev/null 2>&1; then
+    die "a local-scoped Xcode MCP server conflicts with the Xcode bridge; to remove it: inmate claude mcp remove Xcode -s local"
+  fi
+}
+
 start_xcode_bridge() {
   command -v socat > /dev/null || die "Xcode bridge needs socat: brew install socat"
   xcrun --find mcpbridge > /dev/null 2>&1 \
@@ -179,7 +190,7 @@ cmd_run() {
 
   case "${INMATE_XCODE_BRIDGE-}" in
     '' | 0) ;;
-    1) start_xcode_bridge ;;
+    1) check_xcode_conflicts "$project"; start_xcode_bridge ;;
     *) die "INMATE_XCODE_BRIDGE must be 1 or unset: '$INMATE_XCODE_BRIDGE'" ;;
   esac
 

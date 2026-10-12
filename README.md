@@ -192,8 +192,10 @@ How it works:
   with the flag gets its own bridge, which stops when that session exits.
 - **In the VM,** the entrypoint registers `Xcode` as a user-scoped stdio server that runs
   `socat` to connect to the bridge. If you already have a user-scoped server named
-  `Xcode`, it is kept and the bridge is not registered. Without the flag, a managed
-  setting blocks the server, so Claude doesn't start it.
+  `Xcode`, it is kept and the bridge is not registered. If the project's `.mcp.json` or
+  a local-scoped server defines `Xcode`, `inmate` exits instead, since that entry would
+  take precedence over the bridge. Without the flag, a managed setting blocks the
+  server, so Claude doesn't start it.
 
 Set `INMATE_XCODE_BRIDGE_PORT` to change the first port tried. `inmate` tries it and the
 next 19.
