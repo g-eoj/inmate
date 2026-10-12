@@ -1,6 +1,8 @@
 #!/bin/bash
+
 # Claude Code status line. Claude pipes session JSON on stdin on every update;
 # whatever this prints is shown under the prompt.
+
 set -euo pipefail
 
 input=$(jq -c . 2>&1) && [ -n "$input" ] || { printf 'inmate-statusline: bad stdin: %s\n' "${input:-empty}" >&2; exit 1; }

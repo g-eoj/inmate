@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates curl file git jq less \
-    procps ripgrep tzdata unzip xz-utils \
+    procps ripgrep socat tzdata unzip xz-utils \
   && rm -rf /var/lib/apt/lists/*
 
 # gh: get latest as debian lags behind
@@ -56,6 +56,7 @@ COPY defaults.d/ /usr/local/share/inmate/defaults.d/
 RUN jq -s 'reduce .[] as $s ({}; . * $s)' /usr/local/share/inmate/defaults.d/*.json \
   > /usr/local/share/inmate/settings.json
 COPY statusline.sh /usr/local/bin/inmate-statusline
+COPY xcode-mcp.sh /usr/local/bin/inmate-xcode-mcp
 
 COPY entrypoint.sh /usr/local/bin/inmate-entrypoint
 ENTRYPOINT ["/usr/local/bin/inmate-entrypoint"]
