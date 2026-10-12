@@ -32,8 +32,7 @@ xcode_entry='{"type":"stdio","command":"inmate-xcode-mcp","args":[],"env":{}}'
 register_xcode() {
   local f=$HOME/.claude.json
   # already registered
-  jq -e --argjson s "$xcode_entry" '.mcpServers.Xcode == $s' "$f" > /dev/null &&
-return
+  jq -e --argjson s "$xcode_entry" '.mcpServers.Xcode == $s' "$f" > /dev/null && return
   # an Xcode server entry already exists
   if jq -e '.mcpServers.Xcode | . != null and .command != "inmate-xcode-mcp"' "$f" > /dev/null; then
     printf "inmate: existing Xcode MCP server detected; Xcode bridge not registered\n" >&2
