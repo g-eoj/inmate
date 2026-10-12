@@ -1,0 +1,7 @@
+# macOS
+.DS_Store
+._*
+
+# Only the README demo is published
+assets/*
+!assets/inmate.gif

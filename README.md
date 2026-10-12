@@ -14,6 +14,14 @@ container in its own lightweight VM. The VM is given one host directory: the one
 `inmate` from. It cannot see your home directory, Keychain, SSH keys, or host Claude
 config. It does have normal network access; see [Known limitations](#known-limitations).
 
+### Motivation
+
+I built `inmate` after trying Claude Code's `blockReadsOutsideWorkingDirectories` permissions setting.
+It blocks a high volume of actions Claude legitimately needs to function smoothly.
+It occasionally blocks reads that I consider dangerous.
+With so many actions to approve, I would sooner or later approve something bad on accident.
+`inmate` makes it so I don't have to make constant judgements about whether my files will be safe.
+
 ## Requirements
 
 - Apple silicon Mac running macOS 26 or later
