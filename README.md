@@ -11,8 +11,10 @@ inmate claude
 
 `inmate` uses Apple's [`container`](https://github.com/apple/container), which runs each
 container in its own lightweight VM. The VM is given one host directory: the one you ran
-`inmate` from. It cannot see your home directory, Keychain, SSH keys, or host Claude
-config. It does have normal network access; see [Known limitations](#known-limitations).
+`inmate` from. It cannot see the rest of your home directory, Keychain, SSH keys, or host
+Claude config. If you run `inmate` from `~` itself, the VM sees your whole home directory,
+including `~/.ssh` and `~/.claude`. It does have normal network access; see
+[Known limitations](#known-limitations).
 
 ### Motivation
 

@@ -25,6 +25,6 @@ check "project mounted at the same path" grep -qx "pwd=$project"               <
 check "HOME is inside the project"       grep -qx "home=$project/.inmate/home" <<< "$out"
 check "no .ssh visible"                  grep -qx "ssh="                       <<< "$out"
 check "Claude token present"             grep -qx "token=set"                  <<< "$out"
-check "refuses to run from home"         bash -c 'cd ~ && ! script -q /dev/null inmate true'
+check "refuses to run outside home"      bash -c 'cd /tmp && ! script -q /dev/null inmate true'
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

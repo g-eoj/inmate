@@ -156,8 +156,8 @@ cmd_run() {
   project=$(pwd -P)
   case "$project" in
     *[:,]*) die "project path contains ':' or ',' which 'container -v' can't mount: '$project'" ;;
-    "$HOME"/*) ;;
-  *) die "refusing to run outside home: '$project'"
+    "$HOME" | "$HOME"/*) ;;
+    *) die "refusing to run outside home: '$project'"
   esac
 
   ensure_container_running 
