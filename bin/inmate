@@ -125,13 +125,15 @@ start_xcode_bridge() {
   esac
 
   bridge_log=$(mktemp -t inmate-xcode)
-  local port
+  local port tries
   for (( port = base; port < base + 20; port++ )); do
     socat -d -d TCP-LISTEN:"$port",reuseaddr,fork,range="$subnet" \
       EXEC:"xcrun mcpbridge" < /dev/null > /dev/null 2>> "$bridge_log" &
     bridge_pid=$!
     # socat logs "listening on" once bound, or exits if port is taken
+    tries=0
     until grep -q 'listening on' "$bridge_log" || ! kill -0 "$bridge_pid" 2>/dev/null; do
+      (( ++tries < 100 )) || die "socat did not start listening on port $port"
       sleep 0.05
     done
     if kill -0 "$bridge_pid" 2>/dev/null; then
