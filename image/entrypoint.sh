@@ -41,7 +41,10 @@ register_xcode() {
   jq --argjson s "$xcode_entry" '.mcpServers.Xcode = $s' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 }
 
-# Xcode config prepared but disabled by default
+# The Xcode entry stays in .claude.json, but a bridge lasts only for the session
+# that started it. The image ships a managed deny for the server and /etc resets
+# every run, so removing the deny enables Xcode for this session only. Nothing
+# can override a deny; it can only be removed.
 if [ -n "${INMATE_XCODE_BRIDGE_ADDR-}" ]; then
   rm -f /etc/claude-code/managed-settings.d/50-inmate-xcode-off.json
   register_xcode || printf 'inmate: could not register the Xcode MCP server\n' >&2
