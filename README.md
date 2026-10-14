@@ -165,7 +165,9 @@ Claude then has an `Xcode` MCP server. Xcode must be running on the Mac.
 
 Before Claude can use Xcode's tools, it has to open or create a project, and Xcode asks
 on the Mac whether to allow it. Until then, the tools fail with "This agent isn't
-approved". Xcode remembers the approval for later sessions.
+approved". Xcode treats the program that starts `xcrun mcpbridge` as the agent, so it
+sees `socat`, not Claude. Homebrew's `socat` isn't signed by a developer, so Xcode treats
+it as an unknown agent and allows it for at most 24 hours. After that, it asks again.
 
 The first time, install `socat` on the Mac and rebuild the image, which also ships `socat`:
 
