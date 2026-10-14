@@ -5,16 +5,16 @@
 
 set -euo pipefail
 
-input=$(jq -c . 2>&1) && [ -n "$input" ] || { printf 'inmate-statusline: bad stdin: %s\n' "${input:-empty}" >&2; exit 1; }
-
-eval "$(jq -r '
+vars=$(jq -r '
   @sh "model=\(.model.display_name // "-")",
   @sh "effort=\(.effort.level // "-")",
   @sh "pct=\(.context_window.used_percentage // 0 | floor)",
   @sh "size=\(.context_window.context_window_size // 200000)",
   @sh "tokens=\((.context_window.total_input_tokens // 0) + (.context_window.total_output_tokens // 0))",
   @sh "vim=\(.vim.mode // "")"
-' <<< "$input") "
+') && [ -n "$vars" ] || { printf 'inmate-statusline: bad stdin\n' >&2; exit 1; }
+
+eval "$vars"
 
 reset=$'\e[0m'
 dim=$'\e[2m'
