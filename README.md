@@ -92,7 +92,8 @@ binaries on the host. The two can't share a directory: inside the VM each is a m
 `<project>/.inmate/shadow/<dir>`, while on the Mac the project's own `<dir>` is untouched.
 The shadow copies live under `.inmate/`, so git ignores them.
 
-Set `INMATE_SHADOW_DIRS` to a space-separated list to change which directories are shadowed:
+By default, `.venv` and `.build` are shadowed. Set `INMATE_SHADOW_DIRS` to a
+space-separated list to replace them:
 
 ```sh
 INMATE_SHADOW_DIRS=".venv node_modules" inmate claude
@@ -161,19 +162,13 @@ Xcode runs on the Mac, `xcrun mcpbridge`, through a bridge that `inmate` starts:
 INMATE_XCODE_BRIDGE=1 inmate claude
 ```
 
-Claude then has an `Xcode` MCP server. Xcode must be running on the Mac.
+Claude then has an `Xcode` MCP server. Xcode must be running on the Mac, unless you turn
+on its headless server (below).
 
-Before Claude can use Xcode's tools, it has to open or create a project, and Xcode asks
-on the Mac whether to allow it. Until then, the tools fail with "This agent isn't
-approved". Xcode treats the program that starts `xcrun mcpbridge` as the agent, so it
-sees `socat`, not Claude. Homebrew's `socat` isn't signed by a developer, so Xcode treats
-it as an unknown agent and allows it for at most 24 hours. After that, it asks again.
-
-The first time, install `socat` on the Mac and rebuild the image, which also ships `socat`:
+To use an Xcode bridge, first install `socat` on the Mac:
 
 ```sh
 brew install socat
-inmate setup
 ```
 
 If the macOS firewall is on, it asks whether `socat1` may accept incoming connections.
@@ -187,6 +182,29 @@ fw=/usr/libexec/ApplicationFirewall/socketfilterfw
 sudo $fw --add "$(realpath "$(command -v socat)")"
 sudo $fw --unblockapp "$(realpath "$(command -v socat)")"
 ```
+
+Before Claude can use Xcode's tools, it has to open or create a project, and Xcode asks
+on the Mac whether to allow it. Until then, the tools fail with "This agent isn't
+approved". Xcode treats the program that starts `xcrun mcpbridge` as the agent, so it
+sees `socat`, not Claude. Homebrew's `socat` isn't signed by a developer, so Xcode treats
+it as an unknown agent and allows it for at most 24 hours. After that, it asks again.
+
+> [!NOTE]
+> The bridge works better with Xcode 27's headless server. Claude then opens projects in a
+> separate, windowless Xcode service rather than in your Xcode window. It gets its own
+> workspace, its simulator runs don't collide with yours, and Xcode doesn't need to be open.
+> To turn it on:
+>
+> ```sh
+> sudo xcrun mcp-server enable
+> xcrun mcp-server status        # confirm it's enabled
+> ```
+>
+> Apple calls this an early preview. It may not work in every configuration, and a change
+> may not apply until you relaunch Xcode or reboot the Mac. The setting covers every agent
+> on the Mac, not just `inmate`; `sudo xcrun mcp-server disable` turns it off. The approval
+> prompt still applies. Only code-signed agents get longer approvals, so `socat` is still
+> allowed for at most 24 hours.
 
 How it works:
 
@@ -207,10 +225,11 @@ next 19.
 The bridge has no authentication, and Xcode's approval isn't tied to one VM. Anything on
 the container subnet can use it, including `inmate` VMs started without the flag and any
 other containers. Xcode's tools aren't limited to the mounted project either: they can
-see every project open in Xcode. Through the bridge, code in the VM can run code on your
-Mac, for example by adding a Run Script build phase to the project and asking Xcode to
-build. That is a deliberate hole in the isolation; leave the flag off when you don't
-need it.
+see every project open in Xcode. With the headless server, they can also open any project
+on the Mac by path, and opening one outside the approved folders adds its folder without
+asking again. Through the bridge, code in the VM can run code on your Mac, for example by
+adding a Run Script build phase to the project and asking Xcode to build. That is a
+deliberate hole in the isolation; leave the flag off when you don't need it.
 
 ## Claude settings
 
